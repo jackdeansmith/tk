@@ -7,14 +7,27 @@ A personal task management system with first-class support for external blockers
 tk is inspired by [beads](https://github.com/steveyegge/beads), a lightweight issue tracker with first-class dependency support. beads pioneered several ideas that tk builds on:
 
 - JSONL storage for git-friendly diffs
-- Dependencies as core primitive (not an afterthought)
+- Dependencies as a core primitive (not an afterthought)
 - CLI designed for both humans and AI agents
 - Simple data model that stays out of your way
+- A git-like workflow feel for issue tracking
+
+**What tk takes from beads:**
+- The dependency-first mental model where blockers are explicit relationships
+- JSONL storage format for clean diffs and easy inspection
+- CLI-first design that works equally well for humans and scripts
+
+**What tk deliberately avoids:**
+- beads has a massive surface area with many commands and concepts; tk stays minimal
+- beads includes gastown-specific concepts and terminology; tk is domain-agnostic
+- beads has agent orchestration layers; tk has no automation beyond auto-complete
+- beads uses SQLite caching and daemon processes; tk reads/writes flat files directly
 
 tk diverges from beads in a few key ways:
 - **First-class "waits"** for external blockers (packages arriving, time passing) separate from task dependencies
 - **Project-centric** rather than repo-centric - designed for personal life management, not just software development
 - **Stripped down** - no molecules, gates, agents, or workflow automation; just tasks, waits, and dependencies
+- **Radically simple architecture** - no databases, no caching, no daemons; just JSONL files
 
 ## Design Principles
 
@@ -24,13 +37,16 @@ tk diverges from beads in a few key ways:
 4. **CLI-first** - Simple commands that work well for humans and AI agents
 5. **Keep everything** - Nothing is deleted, status changes are permanent record
 6. **Protect against accidents** - Destructive operations require explicit flags
+7. **Start simple** - No premature optimization or architectural complexity
 
 ## Implementation
 
 - **Language**: Go (single binary distribution)
 - **Storage location**: `.tk/` directory in current working directory (no tree walk for v1)
-- **Config file**: `.tkconfig.yaml` sibling to `.tk/` directory
+- **Config file**: `.tkconfig.yaml` sibling to `.tk/` directory (user-created, never auto-generated)
 - **Timezone**: Local system timezone for all dates/times
+- **File writes**: Direct writes, no atomic operations
+- **Concurrency**: No locking (personal tool assumption)
 
 ### Design Decision: No Tree Walk (v1)
 
@@ -54,17 +70,18 @@ A container for related tasks. Each project has a short prefix used in task IDs.
 
 **Validation rules:**
 - `id`: lowercase alphanumeric + dash, 1-50 characters
-- `prefix`: 2-3 uppercase letters
+- `prefix`: 2-3 uppercase letters, must be globally unique across all projects
 
 **Project status effects:**
 - `active`: Normal state, tasks appear in queries
 - `paused`: Project and all tasks hidden from queries (on ice)
 - `done`: Project complete, hidden from default queries
 
-**Notes:**
+**Constraints:**
 - At least one project must exist (cannot delete last project)
-- Project prefix can be changed; this triggers migration of all task/wait IDs
 - The "Default" project created by `tk init` can be renamed but not deleted
+- Cannot add tasks or waits to paused or done projects
+- Prefix must be unique - error if attempting to create or change to an existing prefix
 
 Example:
 ```yaml
@@ -88,35 +105,29 @@ A unit of work that can be completed.
 | `project` | string | yes | Project ID this task belongs to |
 | `status` | enum | yes | `open`, `done`, `dropped` |
 | `priority` | int | yes | 1-4 (1=urgent, 2=high, 3=medium, 4=backlog) |
-| `blocked_by` | [string] | no | Task IDs that must complete first |
-| `waiting_on` | [string] | no | Wait IDs for external blockers |
+| `blocked_by` | [string] | no | Task IDs or Wait IDs that must complete first |
 | `tags` | [string] | no | Lowercase tags for cross-project queries |
 | `notes` | string | no | Freeform notes (markdown supported) |
 | `assignee` | string | no | Freeform assignee name |
-| `due_date` | date | no | Optional soft deadline |
+| `due_date` | date | no | Optional soft deadline (past dates allowed) |
 | `auto_complete` | bool | no | Auto-complete when all blockers done |
-| `log` | [LogEntry] | no | Chronological activity log |
 | `created` | datetime | yes | When task was created |
 | `updated` | datetime | yes | When task was last modified |
 | `done_at` | datetime | no | When status changed to `done` |
 | `dropped_at` | datetime | no | When status changed to `dropped` |
-| `drop_reason` | string | no | Why the task was dropped |
-
-LogEntry:
-| Field | Type | Required | Description |
-|-------|------|----------|-------------|
-| `date` | datetime | yes | When the log entry was created |
-| `text` | string | yes | What happened (unlimited length) |
+| `drop_reason` | string | no | Why the task was dropped (optional) |
 
 **ID format:**
-- 2-digit zero-padding by default (BY-01, BY-02, ..., BY-99, BY-100)
+- Dynamic zero-padding: 2 digits until 100, then 3 digits, etc. (BY-01...BY-99, BY-100...BY-999)
 - IDs stored internally as integers
-- Commands accept any number of leading zeros (BY-007 matches BY-07)
+- Commands accept any case and any number of leading zeros (by-007, BY-7, BY-07 all match BY-07)
+- IDs are normalized to uppercase for storage and display
 
 **Dependencies:**
-- `blocked_by` and `waiting_on` must reference items in the same project
-- Circular dependencies are prevented at creation time
-- Status changes automatically create log entries
+- `blocked_by` can contain both task IDs (e.g., `BY-05`) and wait IDs (e.g., `BY-03W`)
+- All blockers must reference items in the same project
+- Circular dependencies are prevented at creation time (full graph cycle detection across tasks and waits)
+- Editing blocked_by validates only for cycles; removing incomplete blockers is allowed
 
 Example:
 ```yaml
@@ -127,7 +138,6 @@ status: open
 priority: 2
 blocked_by:
   - BY-05
-waiting_on:
   - BY-03W
 tags:
   - hardscape
@@ -138,11 +148,6 @@ notes: |
 assignee: null
 due_date: null
 auto_complete: false
-log:
-  - date: 2025-12-02T10:30:00
-    text: Created
-  - date: 2025-12-06T14:22:00
-    text: Ordered fabric from Home Depot, arriving next week
 created: 2025-12-02T10:30:00
 updated: 2025-12-06T14:22:00
 done_at: null
@@ -162,13 +167,13 @@ waits represent things outside your control that you're waiting to happen.
 | `project` | string | yes | Project this wait belongs to |
 | `status` | enum | yes | `open`, `done`, `dropped` (same as tasks) |
 | `resolution_criteria` | object | yes | How this wait resolves (see below) |
-| `blocked_by` | [string] | no | Task IDs that must complete before wait becomes active |
+| `blocked_by` | [string] | no | Task IDs or Wait IDs that must complete before wait becomes active |
 | `notes` | string | no | Additional context (markdown supported) |
 | `resolution` | string | no | How it resolved (freeform, for done waits) |
 | `created` | datetime | yes | When wait was created |
 | `done_at` | datetime | no | When status changed to `done` |
 | `dropped_at` | datetime | no | When status changed to `dropped` |
-| `drop_reason` | string | no | Why the wait was dropped |
+| `drop_reason` | string | no | Why the wait was dropped (optional) |
 
 **Resolution Criteria:**
 
@@ -182,6 +187,7 @@ Waits have one of two resolution types:
 - `type: time` waits auto-resolve the instant `after` passes (checked by `tk check`)
 - `type: manual` waits require human verification via `tk wait resolve`
 - For manual waits, `check_after` controls when the question surfaces in `tk waits --actionable`. If null, the wait is immediately actionable once unblocked.
+- Date-only values for `after` or `check_after` are interpreted as end of day (23:59:59)
 
 **Display Logic:**
 - If `title` exists, use it for list views
@@ -189,13 +195,14 @@ Waits have one of two resolution types:
 - Else if `type: manual`, display the question (truncated if needed)
 
 **Blocked Waits:**
-- Waits can be `blocked_by` tasks, making them dormant until those tasks complete
+- Waits can be `blocked_by` both tasks and other waits, making them dormant until those blockers complete
 - A dormant wait does not surface in `tk waits --actionable`
-- This enables planning chains like: task → task → wait → task
+- This enables planning chains like: task → wait → wait → task
 
-**Notes:**
+**Constraints:**
 - Waits are project-scoped (same numbering as tasks, with W suffix)
 - Waits and their blockers must be in the same project
+- Cannot resolve dormant waits (must complete blocking items first)
 
 Example (manual wait, immediately actionable):
 ```yaml
@@ -244,7 +251,7 @@ project: backyard
 status: open
 resolution_criteria:
   type: time
-  after: 2026-01-15T00:00:00
+  after: 2026-01-15T23:59:59
 blocked_by: []
 notes: null
 resolution: null
@@ -262,9 +269,9 @@ A task's **effective state** is computed from its fields:
 
 | State | Condition |
 |-------|-----------|
-| `ready` | status=open AND all `blocked_by` tasks are done AND all `waiting_on` waits are done |
+| `ready` | status=open AND all `blocked_by` items are done |
 | `blocked` | status=open AND any `blocked_by` task is not done |
-| `waiting` | status=open AND any `waiting_on` wait is not done |
+| `waiting` | status=open AND any `blocked_by` wait is not done |
 | `done` | status=done |
 | `dropped` | status=dropped |
 
@@ -276,18 +283,18 @@ A wait's **effective state** is computed from its fields:
 
 | State | Condition |
 |-------|-----------|
-| `dormant` | status=open AND any `blocked_by` task is not done |
-| `actionable` | status=open AND all `blocked_by` tasks are done AND (type=manual AND (check_after is null OR check_after has passed)) |
-| `pending` | status=open AND all `blocked_by` tasks are done AND (type=time OR (type=manual AND check_after has not passed)) |
+| `dormant` | status=open AND any `blocked_by` item is not done |
+| `actionable` | status=open AND all `blocked_by` items are done AND (type=manual AND (check_after is null OR check_after has passed)) |
+| `pending` | status=open AND all `blocked_by` items are done AND (type=time OR (type=manual AND check_after has not passed)) |
 | `done` | status=done |
 | `dropped` | status=dropped |
 
 **Notes:**
-- `dormant` waits are blocked by incomplete tasks and do not surface in queries
+- `dormant` waits are blocked by incomplete items and do not surface in queries
 - `actionable` waits are manual waits ready for the user to answer
 - `pending` waits are either time waits waiting to auto-resolve, or manual waits before their check_after time
 - Time waits transition directly from `pending` to `done` when their `after` time passes
-- `dropped` waits no longer block any tasks waiting on them
+- `dropped` waits no longer block any items depending on them
 
 ## Storage Format
 
@@ -300,7 +307,7 @@ All data stored as JSONL (JSON Lines) - one JSON object per line, sorted by ID.
   waits.jsonl       # all waits
   config.json       # global settings (version, etc.)
 
-.tkconfig.yaml      # user configuration (sibling to .tk/)
+.tkconfig.yaml      # user configuration (sibling to .tk/, user-created)
 ```
 
 ### config.json
@@ -313,8 +320,10 @@ All data stored as JSONL (JSON Lines) - one JSON object per line, sorted by ID.
 
 ### .tkconfig.yaml
 
+User-created configuration file (never auto-generated by tk):
+
 ```yaml
-# Auto-run `tk check` on every command
+# Auto-run `tk check` on read commands (list, waits, show, ready, waiting, graph, find)
 autocheck: false
 
 # Default project for `tk add` when -p not specified
@@ -326,18 +335,21 @@ default_priority: 3
 
 ### JSONL Format
 
-Each file contains one JSON object per line, sorted by ID for stable diffs:
+Each file contains one JSON object per line, sorted by ID for stable diffs.
+
+**Sort order:** Prefix alphabetically, then numeric within prefix (BY-01, BY-02, ..., EL-01, EL-02, ...)
 
 ```jsonl
 {"id":"BY-01","title":"Get paper bags","project":"backyard","status":"done",...}
 {"id":"BY-02","title":"Fill bags with weeds","project":"backyard","status":"open",...}
-{"id":"BY-03","title":"Dispose yard waste","project":"backyard","status":"open",...}
+{"id":"EL-01","title":"Order components","project":"electronics","status":"open",...}
 ```
 
 ### Data Integrity
 
 - If JSONL files contain invalid JSON, commands fail with clear error message pointing to the problematic file/line
 - Use `tk validate` to check data integrity
+- Use `tk validate --fix` to auto-repair orphan references (references to non-existent tasks/waits)
 
 ## CLI Reference
 
@@ -363,18 +375,19 @@ tk init
 tk init --name="My Tasks" --prefix=MT    # custom default project
 ```
 
-Fails if `.tk/` already exists.
+Fails if `.tk/` already exists. Never creates `.tkconfig.yaml` (that's user-managed).
 
 ### System Commands
 
 ```bash
-# Check data integrity
+# Check data integrity (report only by default)
 tk validate
+tk validate --fix    # auto-repair orphan references
 
 # Run auto-resolution for time-based waits
 tk check
 
-# Generate shell completion script
+# Generate shell completion script (with dynamic ID completion)
 tk completion bash
 tk completion zsh
 tk completion fish
@@ -390,19 +403,19 @@ tk projects --all              # include paused/done
 # Create project
 tk project new backyard --prefix=BY --name="Backyard Redo"
 
-# Show project summary
-tk project backyard            # stats, recent activity
+# Show project summary (counts only)
+tk project backyard            # e.g., "5 open (2 ready, 3 blocked), 10 done, 2 waits"
 
 # Edit project (flag-based for agents, -i for interactive)
 tk project edit backyard --name="New Name"
 tk project edit backyard --status=paused
-tk project edit backyard --prefix=NW     # triggers ID migration
-tk project edit backyard -i              # open in $EDITOR (YAML format)
+tk project edit backyard --prefix=NW     # triggers ID migration (fails if prefix in use)
+tk project edit backyard -i              # open in $EDITOR (YAML format, abort on error)
 
 # Delete project (cascades - removes all tasks/waits)
 tk project delete backyard --force
 
-# Export project as plain text (full state)
+# Export project as plain text (human-readable, not for import)
 tk dump backyard
 ```
 
@@ -413,8 +426,11 @@ tk dump backyard
 tk add "Dig test hole"
 tk add "Dig test hole" --project=backyard
 tk add "Dig test hole" -p backyard --priority=1 --tag=weekend
+tk add "Dig test hole" -p backyard --blocked-by=BY-05,BY-03W
 
-# List tasks
+# Output: BY-08 Dig test hole
+
+# List tasks (sorted by ID)
 tk list                        # all open tasks in active projects
 tk list -p backyard            # one project
 tk list --ready                # unblocked and not waiting
@@ -427,13 +443,14 @@ tk list --priority=1           # filter by priority
 tk list --p1                   # shorthand for --priority=1
 tk list --tag=errand           # filter by tag
 tk list --tag=call --tag=home  # AND: must have all tags
-tk list --overdue              # tasks with passed due_date
-tk list --limit=10             # limit results
-tk list --offset=20            # skip first N results
+tk list --overdue              # tasks with due_date < now (time-aware)
 
-# Show task details (summary by default, --verbose for full log)
+# Output columns: ID, status indicator, priority, title, tags
+
+# Show task details
 tk show BY-07
-tk show BY-07 --verbose
+# Shows: ID, title, status, priority, tags, notes, assignee, due_date
+# For blocked_by: shows ID + [status] + title (e.g., "BY-05 [done] Dig test hole")
 
 # Edit task (flag-based for agents, -i for interactive)
 tk edit BY-07 --title="New title"
@@ -445,11 +462,10 @@ tk edit BY-07 --auto-complete=true
 tk edit BY-07 --tags=weekend,hardscape      # replaces all tags
 tk edit BY-07 --add-tag=urgent              # adds tag
 tk edit BY-07 --remove-tag=weekend          # removes tag
-tk edit BY-07 --blocked-by=BY-05,BY-06      # replaces blockers
+tk edit BY-07 --blocked-by=BY-05,BY-06      # replaces blockers (tasks or waits)
 tk edit BY-07 --add-blocked-by=BY-08        # adds blocker
 tk edit BY-07 --remove-blocked-by=BY-05     # removes blocker
-tk edit BY-07 --waiting-on=BY-03W           # replaces waits
-tk edit BY-07 -i                            # open in $EDITOR (YAML format)
+tk edit BY-07 -i                            # open in $EDITOR (YAML format, abort on error)
 
 # Tag shortcuts
 tk tag BY-07 weekend           # add tag
@@ -457,32 +473,36 @@ tk untag BY-07 weekend         # remove tag
 
 # Complete task
 tk done BY-07
-tk done BY-07 BY-08 BY-09      # batch: multiple IDs
-tk done BY-07 --force          # force even if blockers remain (cascades)
+tk done BY-07 BY-08 BY-09      # batch: multiple IDs (best effort - completes what it can)
+tk done BY-07 --force          # removes unfulfilled blockers from task, then completes
+
+# Output on success: shows unblocked tasks, activated waits, auto-completed tasks
 
 # Drop task
+tk drop BY-07
 tk drop BY-07 --reason="No longer needed"
-tk drop BY-07 --drop-deps      # also drop all dependent tasks
+tk drop BY-07 --drop-deps      # also drop all dependent tasks and blocked waits
 tk drop BY-07 --remove-deps    # remove this task from dependents' blocked_by
 
 # Reopen task (works on done or dropped)
 tk reopen BY-07
+# Clears drop_reason if present; does not affect downstream tasks
 
 # Defer task (creates time wait and links it)
-tk defer BY-07 --days=4                # defer for 4 days
-tk defer BY-07 --until=2026-01-20      # defer until specific date
+# Error if task already has open waits
+tk defer BY-07 --days=4                # defer for 4 days (end of that day)
+tk defer BY-07 --until=2026-01-20      # defer until specific date (end of day)
 
-# Add log entry
-tk log BY-07 "Tested soil, mostly clean fill"
-
-# Move task to different project (fails if task has deps or waits)
+# Move task to different project
+# Fails if ANY task or wait references BY-07 (in either direction)
 tk move BY-07 --to=household
 
-# Dependencies between tasks
+# Dependencies between tasks (--by works for both tasks and waits)
 tk block BY-07 --by=BY-05          # BY-07 blocked by BY-05
+tk block BY-07 --by=BY-03W         # BY-07 blocked by wait BY-03W
 tk unblock BY-07 --from=BY-05      # remove dependency
 
-# Query dependencies
+# Query dependencies (shows both tasks and waits)
 tk blocked-by BY-07                # what is blocking BY-07?
 tk blocking BY-05                  # what is BY-05 blocking?
 ```
@@ -496,22 +516,22 @@ tk wait add "Fabric delivery" -p backyard --question="Did the landscape fabric a
 tk wait add -p backyard --question="Did the PCBs arrive?" --check-after=2026-01-10
 tk wait add -p backyard --question="Did the PCBs arrive?" --blocked-by=EL-05
 
+# Output: BY-03W Did the landscape fabric arrive?
+
 # Create time wait (--after implies type=time)
-tk wait add -p backyard --after=2026-01-15
-tk wait add "After Jan 15" -p backyard --after=2026-01-15T00:00:00
+tk wait add -p backyard --after=2026-01-15                # end of day
+tk wait add "After Jan 15" -p backyard --after=2026-01-15T14:00:00
 
-# Explicit type (--type=manual requires --question, --type=time requires --after)
-tk wait add -p backyard --type=manual --question="Did the package arrive?"
-tk wait add -p backyard --type=time --after=2026-01-15
-
-# List waits
-tk waits                       # all open waits in active projects
+# List waits (sorted by ID)
+tk waits                       # all open waits in active projects (auto-runs tk check)
 tk waits -p backyard           # one project
-tk waits --actionable          # manual waits ready for user to answer
-tk waits --dormant             # waits blocked by incomplete tasks
+tk waits --actionable          # manual waits ready for user to answer (auto-runs tk check)
+tk waits --dormant             # waits blocked by incomplete items
 tk waits --done                # completed waits
 tk waits --dropped             # dropped waits
 tk waits --all                 # all waits including done/dropped
+
+# Output columns: ID, display text (title or question or "Until {date}")
 
 # Edit wait
 tk wait edit BY-03W --title="New title"
@@ -519,35 +539,39 @@ tk wait edit BY-03W --question="Updated question?"
 tk wait edit BY-03W --check-after=2026-01-20T12:00:00
 tk wait edit BY-03W --after=2026-01-20T12:00:00      # for time waits
 tk wait edit BY-03W --notes="Tracking number: 123456"
-tk wait edit BY-03W --blocked-by=BY-05,BY-06         # replaces blockers
+tk wait edit BY-03W --blocked-by=BY-05,BY-06         # replaces blockers (tasks or waits)
 tk wait edit BY-03W --add-blocked-by=BY-07           # adds blocker
 tk wait edit BY-03W --remove-blocked-by=BY-05        # removes blocker
 tk wait edit BY-03W -i                               # open in $EDITOR (YAML format)
 
-# Resolve manual wait
+# Resolve manual wait (immediate, no confirmation prompt)
 tk wait resolve BY-03W
 tk wait resolve BY-03W --as="Arrived damaged, returning"
 
-# Defer manual wait (push back check_after)
-tk wait defer BY-03W --days=4
+# Resolving a time wait early: allowed, updates 'after' to current time, prints explanation
+tk wait resolve BY-07W
+
+# Error: cannot resolve dormant waits
+
+# Defer wait (push back dates)
+tk wait defer BY-03W --days=4                # manual: pushes check_after; time: pushes after
 tk wait defer BY-03W --until=2026-01-20
 
 # Drop wait
+tk wait drop BY-03W
 tk wait drop BY-03W --reason="No longer needed"
-tk wait drop BY-03W --drop-deps --reason="Cancelling order"    # also drop dependent tasks
-tk wait drop BY-03W --remove-deps --reason="Changed approach"  # unlink from dependent tasks
-
-# Link task to wait
-tk block BY-07 --on=BY-03W           # BY-07 waiting on BY-03W
-tk unblock BY-07 --from=BY-03W       # remove wait dependency
+tk wait drop BY-03W --drop-deps              # also drop dependent tasks
+tk wait drop BY-03W --remove-deps            # unlink from dependent tasks
 ```
 
 ### Queries
 
 ```bash
-# Find tasks (case-insensitive substring match in title and notes)
+# Find tasks and waits (case-insensitive substring match in title/question and notes)
 tk find "gravel"               # search all active projects
 tk find "gravel" -p backyard   # within project
+
+# Output clearly labels tasks vs waits in results
 
 # What's actionable right now?
 tk ready                       # alias for: tk list --ready
@@ -563,45 +587,75 @@ tk waiting                     # alias for: tk waits --actionable
 tk graph                       # all projects
 tk graph -p backyard           # one project
 
+# Full styling:
+# - Tasks as boxes, waits as diamonds
+# - Colors for states: ready (green), blocked (red), waiting (yellow), done (gray), dropped (strikethrough)
+# - Dashed lines for wait dependencies
+
 # Output suitable for graphviz: tk graph | dot -Tpng -o deps.png
 ```
 
 ## Completion Behavior
 
-When completing a task (`tk done BY-07`):
-- If task has incomplete blockers or open waits: error, suggest `--force`
-- With `--force`: removes unfulfilled waits/blockers from the task, completes entire subtree of dependent tasks
-- On success: shows what tasks were unblocked and what waits became active
-  - Example: "BY-07 done. Unblocked: BY-08, BY-09. Waits now active: BY-03W"
-- If task has `auto_complete: true` tasks depending on it, those may auto-complete
+### Auto-Complete
+
+When any task is completed (for any reason), check all tasks that depend on it. If a dependent task has `auto_complete: true` AND all its blockers are now done, that task auto-completes. This cascades transitively through the dependency graph.
+
+### Completing a Task (`tk done BY-07`)
+
+- If task has incomplete blockers: error, suggest `--force`
+- With `--force`: removes unfulfilled blockers from the task's `blocked_by` list, then completes the task
+- On success: shows what tasks were unblocked, what waits became active, and what tasks were auto-completed
+  - Example: "BY-07 done. Unblocked: BY-08, BY-09. Waits now active: BY-03W. Auto-completed: BY-10"
 - Waits that were blocked by this task become active (dormant → actionable/pending)
 
-When dropping a task (`tk drop BY-07`):
+### Batch Completion (`tk done BY-07 BY-08 BY-09`)
+
+- Best effort: completes all tasks that can be completed
+- Reports errors for tasks that couldn't be completed (e.g., had blockers)
+- Continues processing remaining tasks after errors
+
+### Dropping a Task (`tk drop BY-07`)
+
 - If task has dependent tasks OR blocked waits: error, suggest `--drop-deps` or `--remove-deps`
 - With `--drop-deps`: drops all dependent tasks AND blocked waits recursively
 - With `--remove-deps`: removes BY-07 from all downstream blocked_by lists
   - Dependent tasks become unblocked
   - Blocked waits become active (dormant → actionable/pending)
-- Requires `--reason` for the drop reason
+- `--reason` is optional
 
-When dropping a wait (`tk wait drop BY-03W`):
-- If wait has tasks waiting on it: error, suggest `--drop-deps` or `--remove-deps`
-- With `--drop-deps`: drops all tasks waiting on this wait recursively
-- With `--remove-deps`: removes BY-03W from all downstream waiting_on lists
-  - Those tasks may become ready if they have no other blockers
-- Requires `--reason` for the drop reason
+### Dropping a Wait (`tk wait drop BY-03W`)
+
+- If wait has items depending on it: error, suggest `--drop-deps` or `--remove-deps`
+- With `--drop-deps`: drops all tasks and waits depending on this wait recursively
+- With `--remove-deps`: removes BY-03W from all downstream blocked_by lists
+  - Those items may become ready if they have no other blockers
+- `--reason` is optional
+
+### Reopening (`tk reopen BY-07`)
+
+- Works on both done and dropped tasks/waits
+- Sets status back to open
+- Clears drop_reason, dropped_at, done_at
+- Does NOT affect downstream tasks (they remain in whatever state they're in)
 
 ## Error Handling
 
 - Errors go to stderr with non-zero exit code
 - Error messages are human-readable and actionable
-- No "did you mean" suggestions (keep it simple)
+
+**Error message styles:**
+- Not found: `error: task BY-999 not found`
+- Cycle detected: `error: BY-07 cannot depend on BY-05 (would create cycle: BY-05 → BY-03 → BY-07)`
+- Project not active: `error: cannot add task to paused project 'backyard'`
+- $EDITOR not set: `error: EDITOR not set. Set it or use --flags instead of -i`
 
 ## Output Formatting
 
 - Colored output auto-detected (color if TTY, plain if piped)
 - `tk list` shows flat list with status indicators [blocked], [waiting], etc.
-- Future enhancement: additional output styles and colors for `tk list`
+- Dates displayed in ISO 8601 format (2026-01-15T14:30:00)
+- Running `tk` with no subcommand shows help
 
 ## Future Considerations
 
@@ -620,3 +674,6 @@ Not in v1, but worth thinking about:
 - **Advanced search** - Fuzzy matching, full-text search with ranking
 - **Accessibility** - Screen reader support, high contrast mode
 - **Bulk import** - Create multiple tasks from text file
+- **Task logs** - Chronological activity log per task
+- **Due soon filter** - `--due-before=DATE` for filtering by due date
+- **Summary dashboard** - `tk status` showing counts across all projects
