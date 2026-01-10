@@ -19,8 +19,8 @@ This document describes the implementation phases for `tk`, a task tracker CLI. 
 |-------|--------|-------|
 | 1. Core Types & Serialization | ✅ Complete | All types, ID handling, YAML serialization |
 | 2. State Derivation | ✅ Complete | TaskState, WaitState, helper functions |
-| 3. Dependency Graph | 🔲 Not started | Next up |
-| 4. Storage Layer | 🔲 Not started | |
+| 3. Dependency Graph | ✅ Complete | Graph queries, cycle detection |
+| 4. Storage Layer | 🔲 Not started | Next up |
 | 5. Core Mutations | 🔲 Not started | |
 | 6. CLI Infrastructure | 🔲 Not started | |
 | 7. Read Commands | 🔲 Not started | |
@@ -314,11 +314,58 @@ Cycle Detection:
 - Mixed: Task → Wait → Task cycle detected
 ```
 
-### Implementation Notes
+### Implementation Notes (Phase 3 Complete)
 
-- Use DFS for cycle detection
-- For `CheckCycle(from, to)`: temporarily add edge, run cycle detection from `to`, check if `from` is reachable
-- Consider using a map-based adjacency list for O(1) neighbor lookup
+**Files created:**
+- `internal/graph/graph.go` — Graph struct with adjacency list representation
+- `internal/graph/cycle.go` — Cycle detection using DFS
+- `internal/graph/graph_test.go` — 17 tests for graph operations
+- `internal/graph/cycle_test.go` — 14 tests for cycle detection
+
+**Key types:**
+```go
+type Graph struct {
+    blockedBy map[string][]string  // node → direct blockers
+    blocking  map[string][]string  // node → nodes it blocks (reverse edges)
+    nodes     map[string]bool      // all known nodes
+}
+```
+
+**Functions implemented:**
+- `BuildGraph(p *ProjectFile) *Graph` — construct graph from project
+- `BlockedBy(id string) []string` — direct blockers
+- `Blocking(id string) []string` — nodes directly blocked by this node
+- `TransitiveBlockedBy(id string) []string` — all transitive blockers (sorted)
+- `TransitiveBlocking(id string) []string` — all transitively blocked nodes (sorted)
+- `HasNode(id string) bool` — check if node exists
+- `Nodes() []string` — all node IDs (sorted)
+- `CheckCycle(from, to string) []string` — returns cycle path if adding edge would create cycle
+- `WouldCreateCycle(from, to string) bool` — convenience boolean wrapper
+- `AddEdge(from, to string) func()` — temporarily add edge, returns removal function
+
+**Design decisions:**
+- Map-based adjacency list for O(1) neighbor lookup
+- DFS for cycle detection (check if `to` can reach `from` via blockedBy edges)
+- Results sorted for deterministic output
+- Queries on non-existent IDs return empty slices (not errors)
+- BlockedBy/Blocking return copies to prevent mutation
+
+**Test coverage:** 100%
+
+**All checks passing:**
+- `go test ./...` — all tests pass
+- `go test -race ./...` — no race conditions
+- `go vet ./...` — no issues
+- `gofmt -l .` — no formatting issues
+- `go mod tidy` — dependencies clean
+
+### Phase 3 Review Notes
+
+Review completed. Changes made:
+
+1. **Added test coverage** for `removeString` edge case — calling the removal function twice (idempotent behavior)
+
+Test coverage improved from 98.9% to 100%.
 
 ---
 
