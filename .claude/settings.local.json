@@ -11,7 +11,8 @@
       "Bash(go mod tidy:*)",
       "Bash(ls:*)",
       "Bash(wc:*)",
-      "Bash(sort:*)"
+      "Bash(sort:*)",
+      "Bash(go build:*)"
     ]
   }
 }
