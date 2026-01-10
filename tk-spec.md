@@ -6,7 +6,7 @@ A personal task management system with first-class support for external blockers
 
 tk is inspired by [beads](https://github.com/steveyegge/beads), a lightweight issue tracker with first-class dependency support. beads pioneered several ideas that tk builds on:
 
-- JSONL storage for git-friendly diffs
+- Text-based storage for git-friendly diffs
 - Dependencies as a core primitive (not an afterthought)
 - CLI designed for both humans and AI agents
 - Simple data model that stays out of your way
@@ -14,7 +14,7 @@ tk is inspired by [beads](https://github.com/steveyegge/beads), a lightweight is
 
 **What tk takes from beads:**
 - The dependency-first mental model where blockers are explicit relationships
-- JSONL storage format for clean diffs and easy inspection
+- Text-based storage format for clean diffs and easy inspection
 - CLI-first design that works equally well for humans and scripts
 
 **What tk deliberately avoids:**
@@ -27,13 +27,13 @@ tk diverges from beads in a few key ways:
 - **First-class "waits"** for external blockers (packages arriving, time passing) separate from task dependencies
 - **Project-centric** rather than repo-centric - designed for personal life management, not just software development
 - **Stripped down** - no molecules, gates, agents, or workflow automation; just tasks, waits, and dependencies
-- **Radically simple architecture** - no databases, no caching, no daemons; just JSONL files
+- **Radically simple architecture** - no databases, no caching, no daemons; just YAML files
 
 ## Design Principles
 
 1. **Tasks live in projects** - Every task belongs to exactly one project
 2. **External blockers are explicit** - "Waiting for package" is different from "blocked by other task"
-3. **Git-friendly storage** - JSONL files, sorted by ID, clean diffs
+3. **Git-friendly storage** - YAML files, sorted by ID, clean diffs
 4. **CLI-first** - Simple commands that work well for humans and AI agents
 5. **Keep everything** - Nothing is deleted, status changes are permanent record
 6. **Protect against accidents** - Destructive operations require explicit flags
@@ -102,7 +102,6 @@ A unit of work that can be completed.
 |-------|------|----------|-------------|
 | `id` | string | yes | `{prefix}-{number}` (e.g., `BY-07`) |
 | `title` | string | yes | Short description of the task |
-| `project` | string | yes | Project ID this task belongs to |
 | `status` | enum | yes | `open`, `done`, `dropped` |
 | `priority` | int | yes | 1-4 (1=urgent, 2=high, 3=medium, 4=backlog) |
 | `blocked_by` | [string] | no | Task IDs or Wait IDs that must complete first |
@@ -133,7 +132,6 @@ Example:
 ```yaml
 id: BY-07
 title: Lay landscape fabric
-project: backyard
 status: open
 priority: 2
 blocked_by:
@@ -164,7 +162,6 @@ waits represent things outside your control that you're waiting to happen.
 |-------|------|----------|-------------|
 | `id` | string | yes | `{prefix}-{number}W` (e.g., `BY-03W`) |
 | `title` | string | no | Short label (derived from resolution_criteria if absent) |
-| `project` | string | yes | Project this wait belongs to |
 | `status` | enum | yes | `open`, `done`, `dropped` (same as tasks) |
 | `resolution_criteria` | object | yes | How this wait resolves (see below) |
 | `blocked_by` | [string] | no | Task IDs or Wait IDs that must complete before wait becomes active |
@@ -208,7 +205,6 @@ Example (manual wait, immediately actionable):
 ```yaml
 id: BY-03W
 title: null
-project: backyard
 status: open
 resolution_criteria:
   type: manual
@@ -225,9 +221,8 @@ drop_reason: null
 
 Example (manual wait, dormant until task completes):
 ```yaml
-id: BY-08W
+id: EL-08W
 title: "Prototype PCBs"
-project: electronics
 status: open
 resolution_criteria:
   type: manual
@@ -247,7 +242,6 @@ Example (time-based wait):
 ```yaml
 id: BY-07W
 title: null
-project: backyard
 status: open
 resolution_criteria:
   type: time
@@ -298,24 +292,24 @@ A wait's **effective state** is computed from its fields:
 
 ## Storage Format
 
-All data stored as JSONL (JSON Lines) - one JSON object per line, sorted by ID.
+All data stored as YAML - one file per project, containing all tasks and waits for that project.
 
 ```
 .tk/
-  projects.jsonl    # project definitions
-  tasks.jsonl       # all tasks
-  waits.jsonl       # all waits
-  config.json       # global settings (version, etc.)
+  config.yaml           # global settings (version, etc.)
+  projects/
+    BY.yaml             # project "backyard" (prefix BY)
+    EL.yaml             # project "electronics" (prefix EL)
 
-.tkconfig.yaml      # user configuration (sibling to .tk/, user-created)
+.tkconfig.yaml          # user configuration (sibling to .tk/, user-created)
 ```
 
-### config.json
+**File naming:** Project files are named by their prefix (e.g., `BY.yaml` for prefix "BY"). This enables O(1) lookup when resolving task IDs - see `BY-07`, open `BY.yaml`.
 
-```json
-{
-  "version": 1
-}
+### config.yaml
+
+```yaml
+version: 1
 ```
 
 ### .tkconfig.yaml
@@ -333,22 +327,72 @@ default_project: default
 default_priority: 3
 ```
 
-### JSONL Format
+### Project File Format
 
-Each file contains one JSON object per line, sorted by ID for stable diffs.
+Each project file contains the project metadata followed by tasks and waits as sorted lists.
 
-**Sort order:** Prefix alphabetically, then numeric within prefix (BY-01, BY-02, ..., EL-01, EL-02, ...)
+**Sort order:** Tasks and waits are sorted by numeric ID within each list (BY-01, BY-02, ..., BY-10, BY-11, ...).
 
-```jsonl
-{"id":"BY-01","title":"Get paper bags","project":"backyard","status":"done",...}
-{"id":"BY-02","title":"Fill bags with weeds","project":"backyard","status":"open",...}
-{"id":"EL-01","title":"Order components","project":"electronics","status":"open",...}
+```yaml
+# .tk/projects/BY.yaml
+
+# Project metadata
+id: backyard
+prefix: BY
+name: Backyard Redo
+description: Replace turf with gravel, replant beds
+status: active
+next_id: 24
+created: 2025-12-02T10:30:00
+
+# Tasks as a sorted list
+tasks:
+  - id: BY-01
+    title: Get paper bags
+    status: done
+    priority: 2
+    tags: [shopping]
+    created: 2025-12-02T10:30:00
+    updated: 2025-12-02T10:30:00
+    done_at: 2025-12-02T11:00:00
+
+  - id: BY-02
+    title: Fill bags with weeds
+    status: open
+    priority: 2
+    blocked_by: [BY-01]
+    notes: |
+      Make sure bags are sturdy.
+      Don't overfill them.
+    created: 2025-12-02T10:35:00
+    updated: 2025-12-02T10:35:00
+
+# Waits as a sorted list
+waits:
+  - id: BY-03W
+    status: open
+    resolution_criteria:
+      type: manual
+      question: Did the landscape fabric arrive from Home Depot?
+    notes: Ordered standard shipping, tracking #12345
+    created: 2025-12-06T14:22:00
 ```
+
+**Why YAML per project?**
+- Clean diffs: editing a task shows only changed fields, not entire lines
+- Dependency traversal: all tasks/waits loaded in one read for in-memory graph operations
+- Multi-line support: notes and descriptions render naturally
+- Self-contained: each project file has everything needed to understand that project
+
+**Why prefix-based filenames?**
+- Instant lookup: task ID `BY-07` maps directly to file `BY.yaml`
+- Filesystem enforces uniqueness: can't create duplicate prefixes
+- Matches mental model: tasks are namespaced by prefix
 
 ### Data Integrity
 
-- If JSONL files contain invalid JSON, commands fail with clear error message pointing to the problematic file/line
-- Use `tk validate` to check data integrity
+- If YAML files contain syntax errors, commands fail with clear error message pointing to the problematic file
+- Use `tk validate` to check data integrity (schema validation, reference checks)
 - Use `tk validate --fix` to auto-repair orphan references (references to non-existent tasks/waits)
 
 ## CLI Reference

@@ -1,0 +1,14 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(go mod init:*)",
+      "Bash(/opt/homebrew/bin/go test -v ./internal/model/...)",
+      "Bash(go test:*)",
+      "Bash(go vet:*)",
+      "Bash(go tool cover:*)",
+      "Bash(gofmt:*)",
+      "Bash(staticcheck:*)",
+      "Bash(go mod tidy:*)"
+    ]
+  }
+}
