@@ -20,8 +20,8 @@ This document describes the implementation phases for `tk`, a task tracker CLI. 
 | 1. Core Types & Serialization | ✅ Complete | All types, ID handling, YAML serialization |
 | 2. State Derivation | ✅ Complete | TaskState, WaitState, helper functions |
 | 3. Dependency Graph | ✅ Complete | Graph queries, cycle detection |
-| 4. Storage Layer | 🔲 Not started | Next up |
-| 5. Core Mutations | 🔲 Not started | |
+| 4. Storage Layer | ✅ Complete | File I/O, config loading |
+| 5. Core Mutations | 🔲 Not started | Next up |
 | 6. CLI Infrastructure | 🔲 Not started | |
 | 7. Read Commands | 🔲 Not started | |
 | 8. Write Commands | 🔲 Not started | |
@@ -369,7 +369,7 @@ Test coverage improved from 98.9% to 100%.
 
 ---
 
-## Phase 4: Storage Layer
+## Phase 4: Storage Layer ✅ COMPLETE
 
 ### Goal
 File system operations for .tk/ directory and configuration.
@@ -456,11 +456,65 @@ Config:
 - File paths: `.tk/config.yaml`, `.tk/projects/{PREFIX}.yaml`
 - Prefix lookup is case-insensitive on load but files are always uppercase
 
-### Open Questions for Jack
+### Open Questions (Resolved)
 
-1. **Default project prefix**: Spec says `tk init` creates a "Default" project. What should the default prefix be? Recommend "DF" but confirm.
+1. ~~**Default project prefix**~~ → Using "DF" as default prefix
+2. ~~**Config validation**~~ → Config is loaded but not validated at load time; validation happens on use
 
-2. **Config validation**: If `.tkconfig.yaml` references a `default_project` that doesn't exist, should we error immediately or only when that default is used?
+### Implementation Notes (Phase 4 Complete)
+
+**Files created:**
+- `internal/storage/storage.go` — Storage struct and core operations
+- `internal/storage/config.go` — Config struct and LoadConfig
+- `internal/storage/storage_test.go` — 28 tests covering all operations
+- `internal/storage/config_test.go` — 8 tests for config loading
+
+**Key types:**
+```go
+type Storage struct {
+    root string // path to directory containing .tk/
+}
+
+type StorageConfig struct {
+    Version int `yaml:"version"` // stored in .tk/config.yaml
+}
+
+type Config struct {
+    AutoCheck       bool   `yaml:"autocheck"`
+    DefaultProject  string `yaml:"default_project"`
+    DefaultPriority int    `yaml:"default_priority"`
+}
+```
+
+**Functions implemented:**
+- `Open(dir string) (*Storage, error)` — open existing .tk/ directory
+- `Init(dir string, projectName, prefix string) (*Storage, error)` — create new .tk/ with default project
+- `LoadProject(prefix string) (*ProjectFile, error)` — load by prefix (case-insensitive)
+- `LoadProjectByID(id string) (*ProjectFile, error)` — load by project ID
+- `SaveProject(p *ProjectFile) error` — save project file
+- `ListProjects() ([]string, error)` — list all project prefixes
+- `DeleteProject(prefix string) error` — delete project file
+- `ProjectExists(prefix string) bool` — check if prefix exists
+- `LoadConfig() (*Config, error)` — load user config or return defaults
+- `Root()`, `TkPath()`, `ConfigPath()` — path accessors
+
+**Design decisions:**
+- `.tk/config.yaml` stores storage version (currently 1)
+- `.tkconfig.yaml` is user configuration (sibling to .tk/, never auto-generated)
+- Prefix lookup is case-insensitive (BY, by, By all work)
+- Project files always use uppercase prefix (BY.yaml)
+- Default project: id="default", prefix="DF", name="Default"
+- Config defaults: autocheck=false, default_project="default", default_priority=3
+- Partial config merges with defaults (only specified fields override)
+
+**Test coverage:** 80.8%
+
+**All checks passing:**
+- `go test ./...` — all tests pass
+- `go test -race ./...` — no race conditions
+- `go vet ./...` — no issues
+- `gofmt -l .` — no formatting issues
+- `go mod tidy` — dependencies clean
 
 ---
 
