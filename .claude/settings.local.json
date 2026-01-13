@@ -12,7 +12,21 @@
       "Bash(ls:*)",
       "Bash(wc:*)",
       "Bash(sort:*)",
-      "Bash(go build:*)"
+      "Bash(go build:*)",
+      "Bash(go get:*)",
+      "Bash(./tk:*)",
+      "Bash(/tmp/tk:*)",
+      "Bash(/Users/jacksmith/src/tk/tk project:*)",
+      "Bash(/Users/jacksmith/src/tk/tk list:*)",
+      "Bash(/Users/jacksmith/src/tk/tk find \"task\")",
+      "Bash(/Users/jacksmith/src/tk/tk ready:*)",
+      "Bash(/Users/jacksmith/src/tk/tk waiting:*)",
+      "Bash(/Users/jacksmith/src/tk/tk graph:*)",
+      "Bash(/Users/jacksmith/src/tk/tk validate:*)",
+      "Bash(/Users/jacksmith/src/tk/tk show:*)",
+      "Bash(echo:*)",
+      "Bash(/Users/jacksmith/src/tk/tk init:*)",
+      "Bash(git checkout:*)"
     ]
   }
 }

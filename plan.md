@@ -21,10 +21,10 @@ This document describes the implementation phases for `tk`, a task tracker CLI. 
 | 2. State Derivation | ✅ Complete | TaskState, WaitState, helper functions |
 | 3. Dependency Graph | ✅ Complete | Graph queries, cycle detection |
 | 4. Storage Layer | ✅ Complete | File I/O, config loading |
-| 5. Core Mutations | 🔲 Not started | Next up |
-| 6. CLI Infrastructure | 🔲 Not started | |
-| 7. Read Commands | 🔲 Not started | |
-| 8. Write Commands | 🔲 Not started | |
+| 5. Core Mutations | ✅ Complete | All mutation operations |
+| 6. CLI Infrastructure | ✅ Complete | Cobra setup, output formatting, editor, errors |
+| 7. Read Commands | ✅ Complete | All read commands with tests |
+| 8. Write Commands | 🔲 Not started | Next up |
 | 9. Shell Completion | 🔲 Not started | |
 
 ---
@@ -720,11 +720,68 @@ Editor:
 - EDITOR exits non-zero → error
 ```
 
-### Implementation Notes
+### Implementation Notes (Phase 6 Complete)
 
-- Use `golang.org/x/term` for terminal detection
-- Editor suffix should be `.yaml` for syntax highlighting
-- Consider `VISUAL` fallback before `EDITOR`
+**Files created:**
+- `cmd/tk/main.go` — Cobra root command with --help and --version flags
+- `internal/cli/prefix.go` — Command prefix matching
+- `internal/cli/output.go` — Table formatting with ANSI color support
+- `internal/cli/editor.go` — Editor integration with VISUAL/EDITOR fallback
+- `internal/cli/errors.go` — Error types (NotFoundError, CycleError, ValidationError, etc.)
+- `internal/cli/prefix_test.go` — Tests for prefix matching
+- `internal/cli/output_test.go` — Tests for table and color functions
+- `internal/cli/editor_test.go` — Tests for editor integration
+- `internal/cli/errors_test.go` — Tests for error types
+
+**Dependencies added:**
+- `github.com/spf13/cobra` — CLI framework
+- `golang.org/x/term` — Terminal detection
+
+**Key functions:**
+- `MatchCommand(prefix string, commands []string) (string, error)` — prefix matching with exact/prefix/ambiguous handling
+- `Table.AddRow(cols ...string)` / `Table.Render(w io.Writer)` — columnar output with auto-width
+- `IsTerminal(w io.Writer) bool` — detect if output is a terminal
+- `Green/Red/Yellow/Gray(s string)` — ANSI color wrappers (auto-disabled for non-TTY)
+- `EditInEditor(content []byte, suffix string) ([]byte, error)` — launch $VISUAL or $EDITOR
+- `FormatError(err error) string` — prefix errors with "error: "
+
+**Design decisions:**
+- `VISUAL` takes precedence over `EDITOR` (for graphical editors)
+- Colors auto-disabled when stdout is not a terminal
+- Table handles uneven row lengths gracefully
+- visibleWidth() correctly calculates width excluding ANSI escape codes
+- Editor splits command on spaces for args (e.g., "code --wait")
+- Running `tk` with no subcommand shows help
+
+**Test coverage:** 95.5%
+
+**All checks passing:**
+- `go test ./...` — all tests pass
+- `go test -race ./...` — no race conditions
+- `go vet ./...` — no issues
+- `gofmt -l .` — no formatting issues
+- `go mod tidy` — dependencies clean
+
+### Phase 6 Review Notes
+
+Review completed. Changes made:
+
+1. **Improved test coverage** from 93.6% to 95.5%:
+   - Added `TestRunEditorEmptyCommand` — tests empty editor command error path
+   - Added `TestRunEditorNonExistentCommand` — tests non-existent editor error path
+   - `runEditor()` now has 100% coverage
+
+2. **Code quality verified:**
+   - All error types properly implement the `error` interface
+   - Table formatting correctly handles ANSI escape codes for column width calculation
+   - Editor integration properly handles VISUAL/EDITOR precedence
+   - Command prefix matching handles exact match, unique prefix, ambiguous, and no-match cases
+
+3. **Remaining uncovered code** in `EditInEditor()` (73.7%):
+   - Error paths for temp file creation, write, close, and read failures
+   - These are acceptable gaps as they would require filesystem mocking to test
+
+**Ready for Phase 7 implementation.**
 
 ---
 
@@ -817,6 +874,54 @@ Integration tests with fixture .tk/ directories:
 - tk find "gravel" matches notes substring
 - tk graph produces valid DOT
 ```
+
+### Implementation Notes (Phase 7 Complete)
+
+**Files created:**
+- `cmd/tk/init.go` — Initialize .tk/ directory
+- `cmd/tk/projects.go` — List all projects
+- `cmd/tk/project.go` — Show project summary with helper functions
+- `cmd/tk/list.go` — List tasks with extensive filtering
+- `cmd/tk/show.go` — Show full task/wait details
+- `cmd/tk/waits.go` — List waits with filtering
+- `cmd/tk/find.go` — Search tasks and waits
+- `cmd/tk/ready.go` — Alias for `tk list --ready`
+- `cmd/tk/waiting.go` — Alias for `tk waits --actionable`
+- `cmd/tk/graph.go` — Generate DOT dependency graph
+- `cmd/tk/validate.go` — Report validation errors
+- `cmd/tk/commands_test.go` — 23 integration tests
+
+**Key features:**
+- All filters implemented: --ready, --blocked, --waiting, --done, --dropped, --all
+- Priority filtering: --priority=N and --p1/--p2/--p3/--p4 shorthands
+- Tag filtering: --tag (repeatable, AND logic for multiple tags)
+- Overdue filtering: --overdue
+- Autocheck: read commands run `tk check` if config.autocheck=true
+- `tk waits` always runs autocheck (per spec)
+- Case-insensitive ID lookup
+- Colors: ready=green, blocked=red, waiting=yellow, done=gray
+- Table output with proper column alignment (ANSI-aware)
+- DOT graph: tasks as boxes, waits as diamonds, dashed edges for waits
+
+**Design decisions:**
+- Helper functions (computeBlockerStates, etc.) shared in project.go
+- Alias commands (ready, waiting) set flags and delegate to main commands
+- Validation can report or fix (--fix removes orphan references)
+- Graph shows colors: palegreen (ready/actionable), lightcoral (blocked/dormant), khaki (waiting/pending), lightgray (done)
+
+**Test coverage:** 23 integration tests covering all commands
+- Filter tests for list and waits
+- Error handling tests (not found, invalid ID)
+- DOT format validation
+- Case-insensitive lookup
+- Multi-tag AND filtering
+
+**All checks passing:**
+- `go test ./...` — all tests pass
+- `go test -race ./...` — no race conditions
+- `go vet ./...` — no issues
+- `gofmt -l .` — no formatting issues
+- `go mod tidy` — dependencies clean
 
 ---
 
