@@ -26,7 +26,8 @@
       "Bash(/Users/jacksmith/src/tk/tk show:*)",
       "Bash(echo:*)",
       "Bash(/Users/jacksmith/src/tk/tk init:*)",
-      "Bash(git checkout:*)"
+      "Bash(git checkout:*)",
+      "Bash(grep:*)"
     ]
   }
 }

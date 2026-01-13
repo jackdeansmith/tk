@@ -844,3 +844,775 @@ func TestGraphDOTFormat(t *testing.T) {
 	// Verify wait edges are dashed
 	assert.Contains(t, output, "[style=dashed]")
 }
+
+// ============= Phase 8 Write Command Tests =============
+
+func TestAddCommand(t *testing.T) {
+	_, s, cleanup := setupTestStorage(t)
+	defer cleanup()
+
+	// Reset flags
+	addProject = "TP"
+	addPriority = 2
+	addTags = []string{"test"}
+	addNotes = ""
+	addAssignee = ""
+	addDueDate = ""
+	addAutoComplete = false
+	addBlockedBy = ""
+
+	// Capture output
+	old := os.Stdout
+	r, w, _ := os.Pipe()
+	os.Stdout = w
+
+	err := runAdd(nil, []string{"Test task"})
+
+	w.Close()
+	var buf bytes.Buffer
+	buf.ReadFrom(r)
+	os.Stdout = old
+
+	output := buf.String()
+
+	assert.NoError(t, err)
+	assert.Contains(t, output, "TP-01")
+	assert.Contains(t, output, "Test task")
+
+	// Verify task was created
+	pf, _ := s.LoadProject("TP")
+	assert.Equal(t, 1, len(pf.Tasks))
+	assert.Equal(t, "Test task", pf.Tasks[0].Title)
+	assert.Equal(t, 2, pf.Tasks[0].Priority)
+	assert.Contains(t, pf.Tasks[0].Tags, "test")
+}
+
+func TestDoneCommand(t *testing.T) {
+	_, s, cleanup := setupTestStorageWithData(t)
+	defer cleanup()
+
+	// Reset flags
+	doneForce = false
+
+	// Capture output
+	old := os.Stdout
+	r, w, _ := os.Pipe()
+	os.Stdout = w
+
+	err := runDone(nil, []string{"TP-01"})
+
+	w.Close()
+	var buf bytes.Buffer
+	buf.ReadFrom(r)
+	os.Stdout = old
+
+	output := buf.String()
+
+	assert.NoError(t, err)
+	assert.Contains(t, output, "TP-01 done")
+	assert.Contains(t, output, "Unblocked")
+	assert.Contains(t, output, "TP-02")
+
+	// Verify task status
+	pf, _ := s.LoadProject("TP")
+	var task *model.Task
+	for i := range pf.Tasks {
+		if pf.Tasks[i].ID == "TP-01" {
+			task = &pf.Tasks[i]
+			break
+		}
+	}
+	assert.Equal(t, model.TaskStatusDone, task.Status)
+	assert.NotNil(t, task.DoneAt)
+}
+
+func TestDoneCommandWithBlockers(t *testing.T) {
+	_, _, cleanup := setupTestStorageWithData(t)
+	defer cleanup()
+
+	// Try to complete a blocked task without force
+	doneForce = false
+
+	// Capture output
+	old := os.Stdout
+	r, w, _ := os.Pipe()
+	os.Stdout = w
+
+	err := runDone(nil, []string{"TP-02"})
+
+	w.Close()
+	var buf bytes.Buffer
+	buf.ReadFrom(r)
+	os.Stdout = old
+
+	output := buf.String()
+
+	// The command should return an error
+	assert.Error(t, err)
+	// The output should contain information about blockers
+	assert.Contains(t, output, "incomplete blockers")
+}
+
+func TestDoneCommandForce(t *testing.T) {
+	_, s, cleanup := setupTestStorageWithData(t)
+	defer cleanup()
+
+	// Complete a blocked task with force
+	doneForce = true
+
+	// Capture output
+	old := os.Stdout
+	r, w, _ := os.Pipe()
+	os.Stdout = w
+
+	err := runDone(nil, []string{"TP-02"})
+
+	w.Close()
+	var buf bytes.Buffer
+	buf.ReadFrom(r)
+	os.Stdout = old
+
+	assert.NoError(t, err)
+
+	// Verify task status
+	pf, _ := s.LoadProject("TP")
+	var task *model.Task
+	for i := range pf.Tasks {
+		if pf.Tasks[i].ID == "TP-02" {
+			task = &pf.Tasks[i]
+			break
+		}
+	}
+	assert.Equal(t, model.TaskStatusDone, task.Status)
+	// Blockers should be removed
+	assert.Empty(t, task.BlockedBy)
+}
+
+func TestDropCommand(t *testing.T) {
+	_, s, cleanup := setupTestStorageWithData(t)
+	defer cleanup()
+
+	// Reset flags
+	dropReason = "Not needed"
+	dropDropDeps = false
+	dropRemoveDeps = true
+
+	// Capture output
+	old := os.Stdout
+	r, w, _ := os.Pipe()
+	os.Stdout = w
+
+	err := runDrop(nil, []string{"TP-01"})
+
+	w.Close()
+	var buf bytes.Buffer
+	buf.ReadFrom(r)
+	os.Stdout = old
+
+	output := buf.String()
+
+	assert.NoError(t, err)
+	assert.Contains(t, output, "TP-01 dropped")
+
+	// Verify task status
+	pf, _ := s.LoadProject("TP")
+	var task *model.Task
+	for i := range pf.Tasks {
+		if pf.Tasks[i].ID == "TP-01" {
+			task = &pf.Tasks[i]
+			break
+		}
+	}
+	assert.Equal(t, model.TaskStatusDropped, task.Status)
+	assert.Equal(t, "Not needed", task.DropReason)
+}
+
+func TestReopenCommand(t *testing.T) {
+	_, s, cleanup := setupTestStorageWithData(t)
+	defer cleanup()
+
+	// Capture output
+	old := os.Stdout
+	r, w, _ := os.Pipe()
+	os.Stdout = w
+
+	err := runReopen(nil, []string{"TP-04"})
+
+	w.Close()
+	var buf bytes.Buffer
+	buf.ReadFrom(r)
+	os.Stdout = old
+
+	output := buf.String()
+
+	assert.NoError(t, err)
+	assert.Contains(t, output, "TP-04 reopened")
+
+	// Verify task status
+	pf, _ := s.LoadProject("TP")
+	var task *model.Task
+	for i := range pf.Tasks {
+		if pf.Tasks[i].ID == "TP-04" {
+			task = &pf.Tasks[i]
+			break
+		}
+	}
+	assert.Equal(t, model.TaskStatusOpen, task.Status)
+	assert.Nil(t, task.DoneAt)
+}
+
+func TestTagCommand(t *testing.T) {
+	_, s, cleanup := setupTestStorageWithData(t)
+	defer cleanup()
+
+	// Capture output
+	old := os.Stdout
+	r, w, _ := os.Pipe()
+	os.Stdout = w
+
+	err := runTag(nil, []string{"TP-01", "newtag"})
+
+	w.Close()
+	var buf bytes.Buffer
+	buf.ReadFrom(r)
+	os.Stdout = old
+
+	output := buf.String()
+
+	assert.NoError(t, err)
+	assert.Contains(t, output, "Added tag")
+	assert.Contains(t, output, "newtag")
+
+	// Verify tag was added
+	pf, _ := s.LoadProject("TP")
+	var task *model.Task
+	for i := range pf.Tasks {
+		if pf.Tasks[i].ID == "TP-01" {
+			task = &pf.Tasks[i]
+			break
+		}
+	}
+	assert.Contains(t, task.Tags, "newtag")
+}
+
+func TestUntagCommand(t *testing.T) {
+	_, s, cleanup := setupTestStorageWithData(t)
+	defer cleanup()
+
+	// Capture output
+	old := os.Stdout
+	r, w, _ := os.Pipe()
+	os.Stdout = w
+
+	err := runUntag(nil, []string{"TP-01", "urgent"})
+
+	w.Close()
+	var buf bytes.Buffer
+	buf.ReadFrom(r)
+	os.Stdout = old
+
+	output := buf.String()
+
+	assert.NoError(t, err)
+	assert.Contains(t, output, "Removed tag")
+	assert.Contains(t, output, "urgent")
+
+	// Verify tag was removed
+	pf, _ := s.LoadProject("TP")
+	var task *model.Task
+	for i := range pf.Tasks {
+		if pf.Tasks[i].ID == "TP-01" {
+			task = &pf.Tasks[i]
+			break
+		}
+	}
+	assert.NotContains(t, task.Tags, "urgent")
+}
+
+func TestBlockCommand(t *testing.T) {
+	_, s, cleanup := setupTestStorageWithData(t)
+	defer cleanup()
+
+	// Reset flags
+	blockBy = "TP-04"
+
+	// Capture output
+	old := os.Stdout
+	r, w, _ := os.Pipe()
+	os.Stdout = w
+
+	err := runBlock(nil, []string{"TP-05"})
+
+	w.Close()
+	var buf bytes.Buffer
+	buf.ReadFrom(r)
+	os.Stdout = old
+
+	output := buf.String()
+
+	assert.NoError(t, err)
+	assert.Contains(t, output, "blocked by")
+
+	// Verify blocker was added
+	pf, _ := s.LoadProject("TP")
+	var task *model.Task
+	for i := range pf.Tasks {
+		if pf.Tasks[i].ID == "TP-05" {
+			task = &pf.Tasks[i]
+			break
+		}
+	}
+	assert.Contains(t, task.BlockedBy, "TP-04")
+}
+
+func TestUnblockCommand(t *testing.T) {
+	_, s, cleanup := setupTestStorageWithData(t)
+	defer cleanup()
+
+	// Reset flags
+	unblockFrom = "TP-01"
+
+	// Capture output
+	old := os.Stdout
+	r, w, _ := os.Pipe()
+	os.Stdout = w
+
+	err := runUnblock(nil, []string{"TP-02"})
+
+	w.Close()
+	var buf bytes.Buffer
+	buf.ReadFrom(r)
+	os.Stdout = old
+
+	output := buf.String()
+
+	assert.NoError(t, err)
+	assert.Contains(t, output, "no longer blocked")
+
+	// Verify blocker was removed
+	pf, _ := s.LoadProject("TP")
+	var task *model.Task
+	for i := range pf.Tasks {
+		if pf.Tasks[i].ID == "TP-02" {
+			task = &pf.Tasks[i]
+			break
+		}
+	}
+	assert.NotContains(t, task.BlockedBy, "TP-01")
+}
+
+func TestBlockedByCommand(t *testing.T) {
+	_, _, cleanup := setupTestStorageWithData(t)
+	defer cleanup()
+
+	// Capture output
+	old := os.Stdout
+	r, w, _ := os.Pipe()
+	os.Stdout = w
+
+	err := runBlockedBy(nil, []string{"TP-02"})
+
+	w.Close()
+	var buf bytes.Buffer
+	buf.ReadFrom(r)
+	os.Stdout = old
+
+	output := buf.String()
+
+	assert.NoError(t, err)
+	assert.Contains(t, output, "TP-01")
+}
+
+func TestBlockingCommand(t *testing.T) {
+	_, _, cleanup := setupTestStorageWithData(t)
+	defer cleanup()
+
+	// Capture output
+	old := os.Stdout
+	r, w, _ := os.Pipe()
+	os.Stdout = w
+
+	err := runBlocking(nil, []string{"TP-01"})
+
+	w.Close()
+	var buf bytes.Buffer
+	buf.ReadFrom(r)
+	os.Stdout = old
+
+	output := buf.String()
+
+	assert.NoError(t, err)
+	assert.Contains(t, output, "TP-02")
+}
+
+func TestProjectNewCommand(t *testing.T) {
+	_, s, cleanup := setupTestStorage(t)
+	defer cleanup()
+
+	// Reset flags
+	projectNewPrefix = "NP"
+	projectNewName = "New Project"
+	projectNewDescription = "Test description"
+
+	// Capture output
+	old := os.Stdout
+	r, w, _ := os.Pipe()
+	os.Stdout = w
+
+	err := runProjectNew(nil, []string{"newproject"})
+
+	w.Close()
+	var buf bytes.Buffer
+	buf.ReadFrom(r)
+	os.Stdout = old
+
+	output := buf.String()
+
+	assert.NoError(t, err)
+	assert.Contains(t, output, "Created project")
+	assert.Contains(t, output, "NP")
+
+	// Verify project was created
+	pf, err := s.LoadProject("NP")
+	assert.NoError(t, err)
+	assert.Equal(t, "newproject", pf.ID)
+	assert.Equal(t, "New Project", pf.Name)
+}
+
+func TestProjectDeleteCommand(t *testing.T) {
+	_, s, cleanup := setupTestStorage(t)
+	defer cleanup()
+
+	// Create a second project first
+	projectNewPrefix = "DP"
+	projectNewName = "To Delete"
+	projectNewDescription = ""
+	runProjectNew(nil, []string{"todelete"})
+
+	// Reset delete flags
+	projectDeleteForce = true
+
+	// Capture output
+	old := os.Stdout
+	r, w, _ := os.Pipe()
+	os.Stdout = w
+
+	err := runProjectDelete(nil, []string{"DP"})
+
+	w.Close()
+	var buf bytes.Buffer
+	buf.ReadFrom(r)
+	os.Stdout = old
+
+	output := buf.String()
+
+	assert.NoError(t, err)
+	assert.Contains(t, output, "Deleted")
+
+	// Verify project was deleted
+	_, err = s.LoadProject("DP")
+	assert.Error(t, err)
+}
+
+func TestCheckCommand(t *testing.T) {
+	_, s, cleanup := setupTestStorage(t)
+	defer cleanup()
+
+	// Create a time wait that has passed
+	pf, _ := s.LoadProject("TP")
+	past := time.Now().Add(-24 * time.Hour)
+	pf.Waits = []model.Wait{
+		{
+			ID:     "TP-01W",
+			Status: model.WaitStatusOpen,
+			ResolutionCriteria: model.ResolutionCriteria{
+				Type:  model.ResolutionTypeTime,
+				After: &past,
+			},
+			Created: time.Now(),
+		},
+	}
+	pf.NextID = 2
+	s.SaveProject(pf)
+
+	// Capture output
+	old := os.Stdout
+	r, w, _ := os.Pipe()
+	os.Stdout = w
+
+	err := runCheck(nil, nil)
+
+	w.Close()
+	var buf bytes.Buffer
+	buf.ReadFrom(r)
+	os.Stdout = old
+
+	output := buf.String()
+
+	assert.NoError(t, err)
+	assert.Contains(t, output, "Resolved")
+	assert.Contains(t, output, "TP-01W")
+
+	// Verify wait was resolved
+	pf, _ = s.LoadProject("TP")
+	assert.Equal(t, model.WaitStatusDone, pf.Waits[0].Status)
+}
+
+func TestWaitAddManualCommand(t *testing.T) {
+	_, s, cleanup := setupTestStorage(t)
+	defer cleanup()
+
+	// Reset flags
+	waitAddProject = "TP"
+	waitAddQuestion = "Did the package arrive?"
+	waitAddAfter = ""
+	waitAddCheckAfter = ""
+	waitAddNotes = ""
+	waitAddBlockedBy = ""
+
+	// Capture output
+	old := os.Stdout
+	r, w, _ := os.Pipe()
+	os.Stdout = w
+
+	err := runWaitAdd(nil, nil)
+
+	w.Close()
+	var buf bytes.Buffer
+	buf.ReadFrom(r)
+	os.Stdout = old
+
+	output := buf.String()
+
+	assert.NoError(t, err)
+	assert.Contains(t, output, "TP-01W")
+	assert.Contains(t, output, "Did the package arrive?")
+
+	// Verify wait was created
+	pf, _ := s.LoadProject("TP")
+	assert.Equal(t, 1, len(pf.Waits))
+	assert.Equal(t, model.ResolutionTypeManual, pf.Waits[0].ResolutionCriteria.Type)
+}
+
+func TestWaitAddTimeCommand(t *testing.T) {
+	_, s, cleanup := setupTestStorage(t)
+	defer cleanup()
+
+	// Reset flags
+	waitAddProject = "TP"
+	waitAddQuestion = ""
+	waitAddAfter = "2030-12-31"
+	waitAddCheckAfter = ""
+	waitAddNotes = ""
+	waitAddBlockedBy = ""
+
+	// Capture output
+	old := os.Stdout
+	r, w, _ := os.Pipe()
+	os.Stdout = w
+
+	err := runWaitAdd(nil, nil)
+
+	w.Close()
+	var buf bytes.Buffer
+	buf.ReadFrom(r)
+	os.Stdout = old
+
+	output := buf.String()
+
+	assert.NoError(t, err)
+	assert.Contains(t, output, "TP-01W")
+
+	// Verify wait was created
+	pf, _ := s.LoadProject("TP")
+	assert.Equal(t, 1, len(pf.Waits))
+	assert.Equal(t, model.ResolutionTypeTime, pf.Waits[0].ResolutionCriteria.Type)
+}
+
+func TestWaitResolveCommand(t *testing.T) {
+	_, s, cleanup := setupTestStorageWithData(t)
+	defer cleanup()
+
+	// Reset flags
+	waitResolveAs = "Package arrived"
+
+	// Capture output
+	old := os.Stdout
+	r, w, _ := os.Pipe()
+	os.Stdout = w
+
+	err := runWaitResolve(nil, []string{"TP-01W"})
+
+	w.Close()
+	var buf bytes.Buffer
+	buf.ReadFrom(r)
+	os.Stdout = old
+
+	output := buf.String()
+
+	assert.NoError(t, err)
+	assert.Contains(t, output, "resolved")
+
+	// Verify wait was resolved
+	pf, _ := s.LoadProject("TP")
+	var wait *model.Wait
+	for i := range pf.Waits {
+		if pf.Waits[i].ID == "TP-01W" {
+			wait = &pf.Waits[i]
+			break
+		}
+	}
+	assert.Equal(t, model.WaitStatusDone, wait.Status)
+	assert.Equal(t, "Package arrived", wait.Resolution)
+}
+
+func TestWaitDropCommand(t *testing.T) {
+	_, s, cleanup := setupTestStorageWithData(t)
+	defer cleanup()
+
+	// Reset flags
+	waitDropReason = "Not needed"
+	waitDropDropDeps = false
+	waitDropRemoveDeps = true
+
+	// Capture output
+	old := os.Stdout
+	r, w, _ := os.Pipe()
+	os.Stdout = w
+
+	err := runWaitDrop(nil, []string{"TP-01W"})
+
+	w.Close()
+	var buf bytes.Buffer
+	buf.ReadFrom(r)
+	os.Stdout = old
+
+	output := buf.String()
+
+	assert.NoError(t, err)
+	assert.Contains(t, output, "dropped")
+
+	// Verify wait was dropped
+	pf, _ := s.LoadProject("TP")
+	var wait *model.Wait
+	for i := range pf.Waits {
+		if pf.Waits[i].ID == "TP-01W" {
+			wait = &pf.Waits[i]
+			break
+		}
+	}
+	assert.Equal(t, model.WaitStatusDropped, wait.Status)
+}
+
+func TestDeferCommand(t *testing.T) {
+	_, s, cleanup := setupTestStorageWithData(t)
+	defer cleanup()
+
+	// Reset flags
+	deferDays = 5
+	deferUntil = ""
+
+	// Capture output
+	old := os.Stdout
+	r, w, _ := os.Pipe()
+	os.Stdout = w
+
+	err := runDefer(nil, []string{"TP-05"})
+
+	w.Close()
+	var buf bytes.Buffer
+	buf.ReadFrom(r)
+	os.Stdout = old
+
+	output := buf.String()
+
+	assert.NoError(t, err)
+	assert.Contains(t, output, "deferred")
+	assert.Contains(t, output, "Created wait")
+
+	// Verify wait was created and linked
+	pf, _ := s.LoadProject("TP")
+
+	// Find the task
+	var task *model.Task
+	for i := range pf.Tasks {
+		if pf.Tasks[i].ID == "TP-05" {
+			task = &pf.Tasks[i]
+			break
+		}
+	}
+	assert.NotEmpty(t, task.BlockedBy)
+
+	// Find the wait
+	var found bool
+	for _, bid := range task.BlockedBy {
+		if strings.HasSuffix(bid, "W") {
+			found = true
+			break
+		}
+	}
+	assert.True(t, found, "expected task to be blocked by a wait")
+}
+
+func TestDumpCommand(t *testing.T) {
+	_, _, cleanup := setupTestStorageWithData(t)
+	defer cleanup()
+
+	// Capture output
+	old := os.Stdout
+	r, w, _ := os.Pipe()
+	os.Stdout = w
+
+	err := runDump(nil, []string{"TP"})
+
+	w.Close()
+	var buf bytes.Buffer
+	buf.ReadFrom(r)
+	os.Stdout = old
+
+	output := buf.String()
+
+	assert.NoError(t, err)
+	assert.Contains(t, output, "# TP: Test Project")
+	assert.Contains(t, output, "## Tasks")
+	assert.Contains(t, output, "### TP-01: Ready task")
+	assert.Contains(t, output, "## Waits")
+	assert.Contains(t, output, "### TP-01W")
+}
+
+func TestBatchDoneCommand(t *testing.T) {
+	_, s, cleanup := setupTestStorageWithData(t)
+	defer cleanup()
+
+	// First complete TP-01 to unblock TP-02
+	doneForce = false
+	runDone(nil, []string{"TP-01"})
+
+	// Now try batch completion
+	// Capture output
+	old := os.Stdout
+	r, w, _ := os.Pipe()
+	os.Stdout = w
+
+	err := runDone(nil, []string{"TP-02", "TP-05"})
+
+	w.Close()
+	var buf bytes.Buffer
+	buf.ReadFrom(r)
+	os.Stdout = old
+
+	output := buf.String()
+
+	// Batch should succeed for both
+	assert.NoError(t, err)
+	assert.Contains(t, output, "TP-02 done")
+	assert.Contains(t, output, "TP-05 done")
+
+	// Verify both are done
+	pf, _ := s.LoadProject("TP")
+	for _, task := range pf.Tasks {
+		if task.ID == "TP-02" || task.ID == "TP-05" {
+			assert.Equal(t, model.TaskStatusDone, task.Status)
+		}
+	}
+}

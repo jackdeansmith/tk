@@ -24,7 +24,7 @@ This document describes the implementation phases for `tk`, a task tracker CLI. 
 | 5. Core Mutations | ✅ Complete | All mutation operations |
 | 6. CLI Infrastructure | ✅ Complete | Cobra setup, output formatting, editor, errors |
 | 7. Read Commands | ✅ Complete | All read commands with tests |
-| 8. Write Commands | 🔲 Not started | Next up |
+| 8. Write Commands | ✅ Complete | All write commands with tests |
 | 9. Shell Completion | 🔲 Not started | |
 
 ---
@@ -1001,6 +1001,60 @@ Integration tests verifying file changes:
 - tk defer creates wait and links it
 - tk project edit --prefix renames file and all task IDs
 ```
+
+### Implementation Notes (Phase 8 Complete)
+
+**Files created:**
+- `cmd/tk/add.go` — Add new tasks with all options
+- `cmd/tk/edit.go` — Edit tasks with flags or -i (interactive)
+- `cmd/tk/tag.go` — Tag and untag commands
+- `cmd/tk/done.go` — Complete tasks with batch support and --force
+- `cmd/tk/drop.go` — Drop tasks with --reason, --drop-deps, --remove-deps
+- `cmd/tk/reopen.go` — Reopen done or dropped tasks
+- `cmd/tk/defer.go` — Defer tasks with --days or --until
+- `cmd/tk/move.go` — Move tasks between projects
+- `cmd/tk/block.go` — Block, unblock, blocked-by, blocking commands
+- `cmd/tk/dump.go` — Plain text export
+- `cmd/tk/wait_cmd.go` — Wait subcommands (add, edit, resolve, drop, defer)
+- `cmd/tk/check.go` — Auto-resolve time waits
+
+**Updated files:**
+- `cmd/tk/project.go` — Added project new, edit, delete subcommands
+- `cmd/tk/commands_test.go` — Added 21 integration tests for write commands
+
+**Key features:**
+- All write commands implemented following spec
+- Interactive editing with -i flag (uses $EDITOR/$VISUAL)
+- Batch completion: `tk done BY-01 BY-02 BY-03`
+- Cascade effects: auto-complete, unblocking, wait activation
+- Tag management: `tk tag`, `tk untag`, and `--add-tag`, `--remove-tag` flags
+- Blocker management: `tk block --by=`, `tk unblock --from=`
+- Query commands: `tk blocked-by`, `tk blocking`
+- Wait management: full CRUD with resolve and defer
+- Project management: create, edit (including prefix change), delete
+- Check command: auto-resolve time waits that have passed
+
+**Design decisions:**
+- Write commands generally don't run autocheck (read commands do)
+- Batch done reports errors but continues (best effort)
+- Default project from config when -p not specified
+- Interactive editing uses YAML format for familiarity
+- Due dates accept YYYY-MM-DD format, times accept RFC3339
+- Defer creates a time wait linked to the task
+
+**Test coverage:** 21 new integration tests covering all write commands
+- Task operations: add, done, drop, reopen, tag, untag, defer
+- Block operations: block, unblock, blocked-by, blocking
+- Wait operations: add, resolve, drop
+- Project operations: new, delete
+- Check command
+- Dump command
+- Batch completion
+
+**All checks passing:**
+- `go test ./...` — all tests pass
+- `go build ./...` — successful build
+- All manual tests verified working
 
 ---
 
