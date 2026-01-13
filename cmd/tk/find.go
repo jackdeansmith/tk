@@ -34,6 +34,10 @@ var findProject string
 
 func init() {
 	findCmd.Flags().StringVarP(&findProject, "project", "p", "", "limit search to project (prefix or ID)")
+
+	// Register completion function
+	findCmd.RegisterFlagCompletionFunc("project", completeProjectIDs)
+
 	rootCmd.AddCommand(findCmd)
 }
 

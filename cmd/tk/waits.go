@@ -49,6 +49,10 @@ func init() {
 	waitsCmd.Flags().BoolVar(&waitsDone, "done", false, "show only done waits")
 	waitsCmd.Flags().BoolVar(&waitsDropped, "dropped", false, "show only dropped waits")
 	waitsCmd.Flags().BoolVar(&waitsAll, "all", false, "show all waits")
+
+	// Register completion function
+	waitsCmd.RegisterFlagCompletionFunc("project", completeProjectIDs)
+
 	rootCmd.AddCommand(waitsCmd)
 }
 

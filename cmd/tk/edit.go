@@ -31,8 +31,9 @@ Examples:
   tk edit BY-07 --add-blocked-by=BY-08      # adds blocker
   tk edit BY-07 --remove-blocked-by=BY-05   # removes blocker
   tk edit BY-07 -i                          # open in $EDITOR`,
-	Args: cobra.ExactArgs(1),
-	RunE: runEdit,
+	Args:              cobra.ExactArgs(1),
+	RunE:              runEdit,
+	ValidArgsFunction: completeTaskIDs,
 }
 
 var (
@@ -67,6 +68,13 @@ func init() {
 	editCmd.Flags().StringArrayVar(&editAddBlockedBy, "add-blocked-by", nil, "add a blocker")
 	editCmd.Flags().StringArrayVar(&editRemoveBlockedBy, "remove-blocked-by", nil, "remove a blocker")
 	editCmd.Flags().BoolVarP(&editInteractive, "interactive", "i", false, "edit in $EDITOR")
+
+	// Register completion functions
+	editCmd.RegisterFlagCompletionFunc("add-tag", completeTags)
+	editCmd.RegisterFlagCompletionFunc("remove-tag", completeTags)
+	editCmd.RegisterFlagCompletionFunc("add-blocked-by", completeAnyIDs)
+	editCmd.RegisterFlagCompletionFunc("remove-blocked-by", completeAnyIDs)
+
 	rootCmd.AddCommand(editCmd)
 }
 

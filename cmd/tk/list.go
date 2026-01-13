@@ -70,6 +70,11 @@ func init() {
 	listCmd.Flags().BoolVar(&listP4, "p4", false, "shorthand for --priority=4")
 	listCmd.Flags().StringArrayVar(&listTags, "tag", nil, "filter by tag (can be repeated)")
 	listCmd.Flags().BoolVar(&listOverdue, "overdue", false, "show only overdue tasks")
+
+	// Register completion functions
+	listCmd.RegisterFlagCompletionFunc("project", completeProjectIDs)
+	listCmd.RegisterFlagCompletionFunc("tag", completeTags)
+
 	rootCmd.AddCommand(listCmd)
 }
 

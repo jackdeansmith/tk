@@ -10,6 +10,7 @@ import (
 
 	"github.com/jacksmith/tk/internal/model"
 	"github.com/jacksmith/tk/internal/storage"
+	"github.com/spf13/cobra"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -1614,5 +1615,310 @@ func TestBatchDoneCommand(t *testing.T) {
 		if task.ID == "TP-02" || task.ID == "TP-05" {
 			assert.Equal(t, model.TaskStatusDone, task.Status)
 		}
+	}
+}
+
+// ============= Phase 9 Completion Tests =============
+
+func TestCompletionBashCommand(t *testing.T) {
+	_, _, cleanup := setupTestStorage(t)
+	defer cleanup()
+
+	// Capture output
+	old := os.Stdout
+	r, w, _ := os.Pipe()
+	os.Stdout = w
+
+	err := completionBashCmd.RunE(completionBashCmd, nil)
+
+	w.Close()
+	var buf bytes.Buffer
+	buf.ReadFrom(r)
+	os.Stdout = old
+
+	output := buf.String()
+
+	assert.NoError(t, err)
+	// Bash completion scripts contain specific markers
+	assert.Contains(t, output, "bash completion")
+	assert.Contains(t, output, "__start_tk")
+}
+
+func TestCompletionZshCommand(t *testing.T) {
+	_, _, cleanup := setupTestStorage(t)
+	defer cleanup()
+
+	// Capture output
+	old := os.Stdout
+	r, w, _ := os.Pipe()
+	os.Stdout = w
+
+	err := completionZshCmd.RunE(completionZshCmd, nil)
+
+	w.Close()
+	var buf bytes.Buffer
+	buf.ReadFrom(r)
+	os.Stdout = old
+
+	output := buf.String()
+
+	assert.NoError(t, err)
+	// Zsh completion scripts contain specific markers
+	assert.Contains(t, output, "#compdef tk")
+}
+
+func TestCompletionFishCommand(t *testing.T) {
+	_, _, cleanup := setupTestStorage(t)
+	defer cleanup()
+
+	// Capture output
+	old := os.Stdout
+	r, w, _ := os.Pipe()
+	os.Stdout = w
+
+	err := completionFishCmd.RunE(completionFishCmd, nil)
+
+	w.Close()
+	var buf bytes.Buffer
+	buf.ReadFrom(r)
+	os.Stdout = old
+
+	output := buf.String()
+
+	assert.NoError(t, err)
+	// Fish completion scripts contain specific markers
+	assert.Contains(t, output, "fish completion")
+	assert.Contains(t, output, "complete -c tk")
+}
+
+func TestCompleteProjectIDs(t *testing.T) {
+	_, _, cleanup := setupTestStorageWithData(t)
+	defer cleanup()
+
+	completions, directive := completeProjectIDs(nil, nil, "")
+
+	assert.Equal(t, directive, cobra.ShellCompDirectiveNoFileComp)
+	assert.NotEmpty(t, completions)
+
+	// Should contain the project prefix
+	var hasTP bool
+	for _, c := range completions {
+		if strings.HasPrefix(c, "TP") {
+			hasTP = true
+			break
+		}
+	}
+	assert.True(t, hasTP, "expected completions to include project prefix TP")
+}
+
+func TestCompleteProjectIDsWithFilter(t *testing.T) {
+	_, _, cleanup := setupTestStorageWithData(t)
+	defer cleanup()
+
+	// Test filtering
+	completions, _ := completeProjectIDs(nil, nil, "T")
+
+	var hasTP bool
+	for _, c := range completions {
+		if strings.HasPrefix(c, "TP") {
+			hasTP = true
+			break
+		}
+	}
+	assert.True(t, hasTP, "expected filtered completions to include TP")
+}
+
+func TestCompleteTaskIDs(t *testing.T) {
+	_, _, cleanup := setupTestStorageWithData(t)
+	defer cleanup()
+
+	completions, directive := completeTaskIDs(nil, nil, "")
+
+	assert.Equal(t, directive, cobra.ShellCompDirectiveNoFileComp)
+	assert.NotEmpty(t, completions)
+
+	// Should contain task IDs
+	var hasTP01 bool
+	for _, c := range completions {
+		if strings.HasPrefix(c, "TP-01") && !strings.HasSuffix(strings.Split(c, "\t")[0], "W") {
+			hasTP01 = true
+			break
+		}
+	}
+	assert.True(t, hasTP01, "expected completions to include task TP-01")
+}
+
+func TestCompleteTaskIDsExcludesWaits(t *testing.T) {
+	_, _, cleanup := setupTestStorageWithData(t)
+	defer cleanup()
+
+	completions, _ := completeTaskIDs(nil, nil, "")
+
+	// Should NOT contain wait IDs
+	for _, c := range completions {
+		id := strings.Split(c, "\t")[0]
+		assert.False(t, strings.HasSuffix(id, "W"), "task completions should not include wait IDs")
+	}
+}
+
+func TestCompleteWaitIDs(t *testing.T) {
+	_, _, cleanup := setupTestStorageWithData(t)
+	defer cleanup()
+
+	completions, directive := completeWaitIDs(nil, nil, "")
+
+	assert.Equal(t, directive, cobra.ShellCompDirectiveNoFileComp)
+	assert.NotEmpty(t, completions)
+
+	// Should contain wait IDs
+	var hasTP01W bool
+	for _, c := range completions {
+		if strings.HasPrefix(c, "TP-01W") {
+			hasTP01W = true
+			break
+		}
+	}
+	assert.True(t, hasTP01W, "expected completions to include wait TP-01W")
+}
+
+func TestCompleteWaitIDsExcludesTasks(t *testing.T) {
+	_, _, cleanup := setupTestStorageWithData(t)
+	defer cleanup()
+
+	completions, _ := completeWaitIDs(nil, nil, "")
+
+	// Should only contain wait IDs (ending with W)
+	for _, c := range completions {
+		id := strings.Split(c, "\t")[0]
+		assert.True(t, strings.HasSuffix(id, "W"), "wait completions should only include wait IDs")
+	}
+}
+
+func TestCompleteAnyIDs(t *testing.T) {
+	_, _, cleanup := setupTestStorageWithData(t)
+	defer cleanup()
+
+	completions, directive := completeAnyIDs(nil, nil, "")
+
+	assert.Equal(t, directive, cobra.ShellCompDirectiveNoFileComp)
+	assert.NotEmpty(t, completions)
+
+	// Should contain both tasks and waits
+	var hasTask, hasWait bool
+	for _, c := range completions {
+		id := strings.Split(c, "\t")[0]
+		if strings.HasSuffix(id, "W") {
+			hasWait = true
+		} else if strings.Contains(id, "-") {
+			hasTask = true
+		}
+	}
+	assert.True(t, hasTask, "expected completions to include tasks")
+	assert.True(t, hasWait, "expected completions to include waits")
+}
+
+func TestCompleteTags(t *testing.T) {
+	_, _, cleanup := setupTestStorageWithData(t)
+	defer cleanup()
+
+	completions, directive := completeTags(nil, nil, "")
+
+	assert.Equal(t, directive, cobra.ShellCompDirectiveNoFileComp)
+	assert.NotEmpty(t, completions)
+
+	// Should contain the tags from test data
+	var hasUrgent, hasFeature bool
+	for _, c := range completions {
+		if c == "urgent" {
+			hasUrgent = true
+		}
+		if c == "feature" {
+			hasFeature = true
+		}
+	}
+	assert.True(t, hasUrgent, "expected completions to include 'urgent' tag")
+	assert.True(t, hasFeature, "expected completions to include 'feature' tag")
+}
+
+func TestCompleteTagsWithFilter(t *testing.T) {
+	_, _, cleanup := setupTestStorageWithData(t)
+	defer cleanup()
+
+	// Test filtering
+	completions, _ := completeTags(nil, nil, "urg")
+
+	var hasUrgent bool
+	for _, c := range completions {
+		if c == "urgent" {
+			hasUrgent = true
+		}
+	}
+	assert.True(t, hasUrgent, "expected filtered completions to include 'urgent'")
+}
+
+func TestCompleteTaskIDsThenTags(t *testing.T) {
+	_, _, cleanup := setupTestStorageWithData(t)
+	defer cleanup()
+
+	// First argument: should complete task IDs
+	completions1, _ := completeTaskIDsThenTags(nil, []string{}, "")
+	var hasTaskID bool
+	for _, c := range completions1 {
+		if strings.HasPrefix(c, "TP-") && !strings.HasSuffix(strings.Split(c, "\t")[0], "W") {
+			hasTaskID = true
+			break
+		}
+	}
+	assert.True(t, hasTaskID, "first argument should complete task IDs")
+
+	// Second argument: should complete tags
+	completions2, _ := completeTaskIDsThenTags(nil, []string{"TP-01"}, "")
+	var hasTag bool
+	for _, c := range completions2 {
+		if c == "urgent" || c == "feature" {
+			hasTag = true
+			break
+		}
+	}
+	assert.True(t, hasTag, "second argument should complete tags")
+}
+
+func TestCompleteIDsNoStorage(t *testing.T) {
+	// Change to a directory without .tk
+	tmpDir, err := os.MkdirTemp("", "tk-no-storage-*")
+	require.NoError(t, err)
+	defer os.RemoveAll(tmpDir)
+
+	origDir, err := os.Getwd()
+	require.NoError(t, err)
+	defer os.Chdir(origDir)
+	os.Chdir(tmpDir)
+
+	// Should return empty completions without error
+	completions, directive := completeTaskIDs(nil, nil, "")
+
+	assert.Equal(t, directive, cobra.ShellCompDirectiveNoFileComp)
+	assert.Empty(t, completions)
+}
+
+func TestTruncate(t *testing.T) {
+	tests := []struct {
+		input    string
+		maxLen   int
+		expected string
+	}{
+		{"short", 10, "short"},
+		{"exactly ten", 11, "exactly ten"},
+		{"this is a longer string", 10, "this is..."},
+		{"abc", 3, "abc"},
+		{"abcd", 3, "abc"},
+		{"", 5, ""},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.input, func(t *testing.T) {
+			result := truncate(tt.input, tt.maxLen)
+			assert.Equal(t, tt.expected, result)
+		})
 	}
 }

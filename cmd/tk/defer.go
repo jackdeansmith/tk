@@ -20,8 +20,9 @@ Either --days or --until must be specified.
 Examples:
   tk defer BY-07 --days=4
   tk defer BY-07 --until=2026-01-20`,
-	Args: cobra.ExactArgs(1),
-	RunE: runDefer,
+	Args:              cobra.ExactArgs(1),
+	RunE:              runDefer,
+	ValidArgsFunction: completeTaskIDs,
 }
 
 var (

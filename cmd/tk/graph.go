@@ -32,6 +32,10 @@ var graphProject string
 
 func init() {
 	graphCmd.Flags().StringVarP(&graphProject, "project", "p", "", "limit to project (prefix or ID)")
+
+	// Register completion function
+	graphCmd.RegisterFlagCompletionFunc("project", completeProjectIDs)
+
 	rootCmd.AddCommand(graphCmd)
 }
 

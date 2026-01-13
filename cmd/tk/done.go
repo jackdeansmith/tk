@@ -27,8 +27,9 @@ Examples:
   tk done BY-07
   tk done BY-07 --force
   tk done BY-07 BY-08 BY-09`,
-	Args: cobra.MinimumNArgs(1),
-	RunE: runDone,
+	Args:              cobra.MinimumNArgs(1),
+	RunE:              runDone,
+	ValidArgsFunction: completeTaskIDs,
 }
 
 var doneForce bool

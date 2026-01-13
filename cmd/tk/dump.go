@@ -22,8 +22,9 @@ The project can be specified by its ID (e.g., "backyard") or prefix (e.g., "BY")
 Examples:
   tk dump backyard
   tk dump BY`,
-	Args: cobra.ExactArgs(1),
-	RunE: runDump,
+	Args:              cobra.ExactArgs(1),
+	RunE:              runDump,
+	ValidArgsFunction: completeProjectIDs,
 }
 
 func init() {

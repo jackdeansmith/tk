@@ -70,13 +70,20 @@ var (
 func init() {
 	blockCmd.Flags().StringVar(&blockBy, "by", "", "blocker ID (task or wait)")
 	blockCmd.MarkFlagRequired("by")
+	blockCmd.ValidArgsFunction = completeAnyIDs
+	blockCmd.RegisterFlagCompletionFunc("by", completeAnyIDs)
 	rootCmd.AddCommand(blockCmd)
 
 	unblockCmd.Flags().StringVar(&unblockFrom, "from", "", "blocker ID to remove")
 	unblockCmd.MarkFlagRequired("from")
+	unblockCmd.ValidArgsFunction = completeAnyIDs
+	unblockCmd.RegisterFlagCompletionFunc("from", completeAnyIDs)
 	rootCmd.AddCommand(unblockCmd)
 
+	blockedByCmd.ValidArgsFunction = completeAnyIDs
 	rootCmd.AddCommand(blockedByCmd)
+
+	blockingCmd.ValidArgsFunction = completeAnyIDs
 	rootCmd.AddCommand(blockingCmd)
 }
 

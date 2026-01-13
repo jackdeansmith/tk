@@ -22,8 +22,9 @@ Examples:
   tk drop BY-07 --reason="No longer needed"
   tk drop BY-07 --drop-deps
   tk drop BY-07 --remove-deps`,
-	Args: cobra.ExactArgs(1),
-	RunE: runDrop,
+	Args:              cobra.ExactArgs(1),
+	RunE:              runDrop,
+	ValidArgsFunction: completeTaskIDs,
 }
 
 var (

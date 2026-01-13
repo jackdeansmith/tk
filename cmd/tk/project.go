@@ -26,8 +26,9 @@ Subcommands:
   new      Create a new project
   edit     Edit an existing project
   delete   Delete a project`,
-	Args: cobra.ExactArgs(1),
-	RunE: runProject,
+	Args:              cobra.ExactArgs(1),
+	RunE:              runProject,
+	ValidArgsFunction: completeProjectIDs,
 }
 
 var projectNewCmd = &cobra.Command{
@@ -56,8 +57,9 @@ Examples:
   tk project edit backyard --status=paused
   tk project edit backyard --prefix=NW    # triggers ID migration
   tk project edit backyard -i`,
-	Args: cobra.ExactArgs(1),
-	RunE: runProjectEdit,
+	Args:              cobra.ExactArgs(1),
+	RunE:              runProjectEdit,
+	ValidArgsFunction: completeProjectIDs,
 }
 
 var projectDeleteCmd = &cobra.Command{
@@ -69,8 +71,9 @@ The --force flag is required to confirm deletion.
 
 Examples:
   tk project delete backyard --force`,
-	Args: cobra.ExactArgs(1),
-	RunE: runProjectDelete,
+	Args:              cobra.ExactArgs(1),
+	RunE:              runProjectDelete,
+	ValidArgsFunction: completeProjectIDs,
 }
 
 var (

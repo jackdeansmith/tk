@@ -21,8 +21,9 @@ The ID can be a task ID (e.g., BY-07) or a wait ID (e.g., BY-03W).
 IDs are case-insensitive.
 
 Shows all fields including blockers with their status.`,
-	Args: cobra.ExactArgs(1),
-	RunE: runShow,
+	Args:              cobra.ExactArgs(1),
+	RunE:              runShow,
+	ValidArgsFunction: completeAnyIDs,
 }
 
 func init() {

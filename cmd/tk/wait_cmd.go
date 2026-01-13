@@ -58,8 +58,9 @@ Examples:
   tk wait edit BY-03W --check-after=2026-01-20
   tk wait edit BY-03W --notes="Tracking: 123456"
   tk wait edit BY-03W -i`,
-	Args: cobra.ExactArgs(1),
-	RunE: runWaitEdit,
+	Args:              cobra.ExactArgs(1),
+	RunE:              runWaitEdit,
+	ValidArgsFunction: completeWaitIDs,
 }
 
 var waitResolveCmd = &cobra.Command{
@@ -73,8 +74,9 @@ For time waits, this allows early resolution.
 Examples:
   tk wait resolve BY-03W
   tk wait resolve BY-03W --as="Arrived damaged, returning"`,
-	Args: cobra.ExactArgs(1),
-	RunE: runWaitResolve,
+	Args:              cobra.ExactArgs(1),
+	RunE:              runWaitResolve,
+	ValidArgsFunction: completeWaitIDs,
 }
 
 var waitDropCmd = &cobra.Command{
@@ -91,8 +93,9 @@ Examples:
   tk wait drop BY-03W --reason="No longer needed"
   tk wait drop BY-03W --drop-deps
   tk wait drop BY-03W --remove-deps`,
-	Args: cobra.ExactArgs(1),
-	RunE: runWaitDrop,
+	Args:              cobra.ExactArgs(1),
+	RunE:              runWaitDrop,
+	ValidArgsFunction: completeWaitIDs,
 }
 
 var waitDeferCmd = &cobra.Command{
@@ -106,8 +109,9 @@ For manual waits, updates the 'check_after' field.
 Examples:
   tk wait defer BY-03W --days=4
   tk wait defer BY-03W --until=2026-01-20`,
-	Args: cobra.ExactArgs(1),
-	RunE: runWaitDefer,
+	Args:              cobra.ExactArgs(1),
+	RunE:              runWaitDefer,
+	ValidArgsFunction: completeWaitIDs,
 }
 
 var (
@@ -152,6 +156,7 @@ func init() {
 	waitAddCmd.Flags().StringVar(&waitAddCheckAfter, "check-after", "", "check after date (YYYY-MM-DD or RFC3339)")
 	waitAddCmd.Flags().StringVar(&waitAddNotes, "notes", "", "wait notes")
 	waitAddCmd.Flags().StringVar(&waitAddBlockedBy, "blocked-by", "", "comma-separated blocker IDs")
+	waitAddCmd.RegisterFlagCompletionFunc("project", completeProjectIDs)
 	waitCmd.AddCommand(waitAddCmd)
 
 	// wait edit command
@@ -165,6 +170,8 @@ func init() {
 	waitEditCmd.Flags().StringArrayVar(&waitEditAddBlockedBy, "add-blocked-by", nil, "add a blocker")
 	waitEditCmd.Flags().StringArrayVar(&waitEditRemoveBlockedBy, "remove-blocked-by", nil, "remove a blocker")
 	waitEditCmd.Flags().BoolVarP(&waitEditInteractive, "interactive", "i", false, "edit in $EDITOR")
+	waitEditCmd.RegisterFlagCompletionFunc("add-blocked-by", completeAnyIDs)
+	waitEditCmd.RegisterFlagCompletionFunc("remove-blocked-by", completeAnyIDs)
 	waitCmd.AddCommand(waitEditCmd)
 
 	// wait resolve command

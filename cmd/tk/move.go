@@ -19,8 +19,9 @@ The task will get a new ID in the destination project.
 Examples:
   tk move BY-07 --to=HH
   tk move BY-07 --to=household`,
-	Args: cobra.ExactArgs(1),
-	RunE: runMove,
+	Args:              cobra.ExactArgs(1),
+	RunE:              runMove,
+	ValidArgsFunction: completeTaskIDs,
 }
 
 var moveTo string
@@ -28,6 +29,7 @@ var moveTo string
 func init() {
 	moveCmd.Flags().StringVar(&moveTo, "to", "", "destination project prefix or ID")
 	moveCmd.MarkFlagRequired("to")
+	moveCmd.RegisterFlagCompletionFunc("to", completeProjectIDs)
 	rootCmd.AddCommand(moveCmd)
 }
 

@@ -46,6 +46,11 @@ func init() {
 	addCmd.Flags().StringVar(&addDueDate, "due-date", "", "due date (YYYY-MM-DD)")
 	addCmd.Flags().BoolVar(&addAutoComplete, "auto-complete", false, "auto-complete when blockers done")
 	addCmd.Flags().StringVar(&addBlockedBy, "blocked-by", "", "comma-separated blocker IDs")
+
+	// Register completion functions
+	addCmd.RegisterFlagCompletionFunc("project", completeProjectIDs)
+	addCmd.RegisterFlagCompletionFunc("tag", completeTags)
+
 	rootCmd.AddCommand(addCmd)
 }
 

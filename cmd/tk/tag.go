@@ -18,8 +18,9 @@ var tagCmd = &cobra.Command{
 Examples:
   tk tag BY-07 weekend
   tk tag BY-07 urgent`,
-	Args: cobra.ExactArgs(2),
-	RunE: runTag,
+	Args:              cobra.ExactArgs(2),
+	RunE:              runTag,
+	ValidArgsFunction: completeTaskIDsThenTags,
 }
 
 var untagCmd = &cobra.Command{
@@ -30,8 +31,9 @@ var untagCmd = &cobra.Command{
 Examples:
   tk untag BY-07 weekend
   tk untag BY-07 urgent`,
-	Args: cobra.ExactArgs(2),
-	RunE: runUntag,
+	Args:              cobra.ExactArgs(2),
+	RunE:              runUntag,
+	ValidArgsFunction: completeTaskIDsThenTags,
 }
 
 func init() {

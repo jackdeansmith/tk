@@ -18,8 +18,9 @@ Does not affect dependent items.
 
 Examples:
   tk reopen BY-07`,
-	Args: cobra.ExactArgs(1),
-	RunE: runReopen,
+	Args:              cobra.ExactArgs(1),
+	RunE:              runReopen,
+	ValidArgsFunction: completeTaskIDs,
 }
 
 func init() {
