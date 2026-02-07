@@ -2177,3 +2177,267 @@ func TestValidateCommandDetectsInvalidPriority(t *testing.T) {
 	}
 	assert.True(t, found, "expected invalid_priority error to be detected")
 }
+
+// ============= DF-05: Conflicting List Filter Tests =============
+
+func resetListFlags() {
+	listProject = ""
+	listReady = false
+	listBlocked = false
+	listWaiting = false
+	listDone = false
+	listDropped = false
+	listAll = false
+	listPriority = 0
+	listP1 = false
+	listP2 = false
+	listP3 = false
+	listP4 = false
+	listTags = nil
+	listOverdue = false
+}
+
+func resetWaitsFlags() {
+	waitsProject = ""
+	waitsActionable = false
+	waitsDormant = false
+	waitsDone = false
+	waitsDropped = false
+	waitsAll = false
+}
+
+func TestListConflictingStatusFiltersError(t *testing.T) {
+	_, _, cleanup := setupTestStorageWithData(t)
+	defer cleanup()
+
+	tests := []struct {
+		name     string
+		flags    func()
+		wantErr  bool
+		contains string
+	}{
+		{
+			name: "ready and blocked conflict",
+			flags: func() {
+				listReady = true
+				listBlocked = true
+			},
+			wantErr:  true,
+			contains: "conflicting status filters",
+		},
+		{
+			name: "done and ready conflict",
+			flags: func() {
+				listDone = true
+				listReady = true
+			},
+			wantErr:  true,
+			contains: "conflicting status filters",
+		},
+		{
+			name: "ready and all conflict",
+			flags: func() {
+				listReady = true
+				listAll = true
+			},
+			wantErr:  true,
+			contains: "conflicting status filters",
+		},
+		{
+			name: "blocked and waiting conflict",
+			flags: func() {
+				listBlocked = true
+				listWaiting = true
+			},
+			wantErr:  true,
+			contains: "conflicting status filters",
+		},
+		{
+			name: "done and dropped conflict",
+			flags: func() {
+				listDone = true
+				listDropped = true
+			},
+			wantErr:  true,
+			contains: "conflicting status filters",
+		},
+		{
+			name: "three flags conflict",
+			flags: func() {
+				listReady = true
+				listBlocked = true
+				listDone = true
+			},
+			wantErr:  true,
+			contains: "conflicting status filters",
+		},
+		{
+			name:    "single ready is fine",
+			flags:   func() { listReady = true },
+			wantErr: false,
+		},
+		{
+			name:    "single blocked is fine",
+			flags:   func() { listBlocked = true },
+			wantErr: false,
+		},
+		{
+			name:    "single done is fine",
+			flags:   func() { listDone = true },
+			wantErr: false,
+		},
+		{
+			name:    "single all is fine",
+			flags:   func() { listAll = true },
+			wantErr: false,
+		},
+		{
+			name:    "no status flags is fine",
+			flags:   func() {},
+			wantErr: false,
+		},
+		{
+			name: "ready with priority is fine (not a status filter)",
+			flags: func() {
+				listReady = true
+				listP1 = true
+			},
+			wantErr: false,
+		},
+		{
+			name: "ready with tag is fine (not a status filter)",
+			flags: func() {
+				listReady = true
+				listTags = []string{"urgent"}
+			},
+			wantErr: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			resetListFlags()
+			tt.flags()
+
+			err := runList(nil, nil)
+			if tt.wantErr {
+				assert.Error(t, err)
+				assert.Contains(t, err.Error(), tt.contains)
+			} else {
+				assert.NoError(t, err)
+			}
+		})
+	}
+}
+
+func TestListConflictingFiltersErrorMessage(t *testing.T) {
+	resetListFlags()
+	listReady = true
+	listBlocked = true
+
+	err := validateListStatusFilters()
+	require.Error(t, err)
+	msg := err.Error()
+	// The error message should mention both conflicting flags
+	assert.Contains(t, msg, "--ready")
+	assert.Contains(t, msg, "--blocked")
+	assert.Contains(t, msg, "use only one at a time")
+}
+
+func TestWaitsConflictingStatusFiltersError(t *testing.T) {
+	_, _, cleanup := setupTestStorageWithData(t)
+	defer cleanup()
+
+	tests := []struct {
+		name     string
+		flags    func()
+		wantErr  bool
+		contains string
+	}{
+		{
+			name: "actionable and dormant conflict",
+			flags: func() {
+				waitsActionable = true
+				waitsDormant = true
+			},
+			wantErr:  true,
+			contains: "conflicting status filters",
+		},
+		{
+			name: "done and all conflict",
+			flags: func() {
+				waitsDone = true
+				waitsAll = true
+			},
+			wantErr:  true,
+			contains: "conflicting status filters",
+		},
+		{
+			name: "actionable and done conflict",
+			flags: func() {
+				waitsActionable = true
+				waitsDone = true
+			},
+			wantErr:  true,
+			contains: "conflicting status filters",
+		},
+		{
+			name: "dropped and all conflict",
+			flags: func() {
+				waitsDropped = true
+				waitsAll = true
+			},
+			wantErr:  true,
+			contains: "conflicting status filters",
+		},
+		{
+			name:    "single actionable is fine",
+			flags:   func() { waitsActionable = true },
+			wantErr: false,
+		},
+		{
+			name:    "single dormant is fine",
+			flags:   func() { waitsDormant = true },
+			wantErr: false,
+		},
+		{
+			name:    "single done is fine",
+			flags:   func() { waitsDone = true },
+			wantErr: false,
+		},
+		{
+			name:    "no flags is fine",
+			flags:   func() {},
+			wantErr: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			resetWaitsFlags()
+			tt.flags()
+
+			err := runWaits(nil, nil)
+			if tt.wantErr {
+				assert.Error(t, err)
+				assert.Contains(t, err.Error(), tt.contains)
+			} else {
+				assert.NoError(t, err)
+			}
+		})
+	}
+}
+
+func TestWaitsConflictingFiltersErrorMessage(t *testing.T) {
+	resetWaitsFlags()
+	waitsActionable = true
+	waitsDormant = true
+
+	err := validateWaitsStatusFilters()
+	require.Error(t, err)
+	msg := err.Error()
+	// The error message should mention both conflicting flags
+	assert.Contains(t, msg, "--actionable")
+	assert.Contains(t, msg, "--dormant")
+	assert.Contains(t, msg, "use only one at a time")
+}

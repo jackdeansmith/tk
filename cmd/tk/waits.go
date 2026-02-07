@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/jacksmith/tk/internal/cli"
@@ -57,6 +58,11 @@ func init() {
 }
 
 func runWaits(cmd *cobra.Command, args []string) error {
+	// Validate that conflicting status filters are not combined
+	if err := validateWaitsStatusFilters(); err != nil {
+		return err
+	}
+
 	s, err := storage.Open(".")
 	if err != nil {
 		return err
@@ -158,6 +164,34 @@ func shouldIncludeWait(w *model.Wait, blockerStates model.BlockerStatus, now tim
 
 	// Default: show only open waits (not done/dropped)
 	return w.Status == model.WaitStatusOpen
+}
+
+// validateWaitsStatusFilters checks that at most one status filter is active.
+// Status filters (--actionable, --dormant, --done, --dropped, --all) are
+// mutually exclusive. Using more than one produces confusing results because a
+// wait can only be in one state at a time.
+func validateWaitsStatusFilters() error {
+	var active []string
+	if waitsActionable {
+		active = append(active, "--actionable")
+	}
+	if waitsDormant {
+		active = append(active, "--dormant")
+	}
+	if waitsDone {
+		active = append(active, "--done")
+	}
+	if waitsDropped {
+		active = append(active, "--dropped")
+	}
+	if waitsAll {
+		active = append(active, "--all")
+	}
+
+	if len(active) > 1 {
+		return fmt.Errorf("conflicting status filters: %s (use only one at a time)", strings.Join(active, ", "))
+	}
+	return nil
 }
 
 func formatWaitState(state model.WaitState) string {

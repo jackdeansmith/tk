@@ -43,12 +43,13 @@ tasks:
       done_at: 2026-02-06T20:49:11-08:00
     - id: DF-05
       title: Error or warn when conflicting list filters are combined
-      status: open
+      status: done
       priority: 2
       tags: [bug]
       notes: tk list --ready --blocked silently shows only ready tasks, ignoring --blocked. tk list --done --ready shows only done tasks. The shouldIncludeTask function uses an else-if chain so only the first matching filter wins. Users get silently wrong results. Should either error on conflicting filters or combine them with OR logic.
       created: 2026-02-06T20:05:40-08:00
-      updated: 2026-02-06T20:05:40-08:00
+      updated: 2026-02-06T20:56:43-08:00
+      done_at: 2026-02-06T20:56:43-08:00
     - id: DF-06
       title: Truncate or cap long titles in list table output
       status: open

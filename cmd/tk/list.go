@@ -79,6 +79,11 @@ func init() {
 }
 
 func runList(cmd *cobra.Command, args []string) error {
+	// Validate that conflicting status filters are not combined
+	if err := validateListStatusFilters(); err != nil {
+		return err
+	}
+
 	s, err := storage.Open(".")
 	if err != nil {
 		return err
@@ -226,6 +231,37 @@ func shouldIncludeTask(t *model.Task, blockerStates model.BlockerStatus, priorit
 	}
 
 	return true
+}
+
+// validateListStatusFilters checks that at most one status filter is active.
+// Status filters (--ready, --blocked, --waiting, --done, --dropped, --all) are
+// mutually exclusive. Using more than one produces confusing results because a
+// task can only be in one state at a time.
+func validateListStatusFilters() error {
+	var active []string
+	if listReady {
+		active = append(active, "--ready")
+	}
+	if listBlocked {
+		active = append(active, "--blocked")
+	}
+	if listWaiting {
+		active = append(active, "--waiting")
+	}
+	if listDone {
+		active = append(active, "--done")
+	}
+	if listDropped {
+		active = append(active, "--dropped")
+	}
+	if listAll {
+		active = append(active, "--all")
+	}
+
+	if len(active) > 1 {
+		return fmt.Errorf("conflicting status filters: %s (use only one at a time)", strings.Join(active, ", "))
+	}
+	return nil
 }
 
 func formatTaskState(state model.TaskState) string {
