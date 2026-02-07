@@ -213,6 +213,26 @@ tk list --overdue
 tk show BY-07
 ```
 
+### Searching
+
+Use `tk find` to search across tasks and waits by keyword:
+
+```bash
+# Search for a keyword
+tk find "plumber"
+
+# Limit search to a specific project
+tk find "faucet" -p HM
+```
+
+The search is case-insensitive and matches substrings in:
+- Task titles and notes
+- Wait titles, questions, and notes
+
+Results are grouped by type (Tasks, then Waits) and show each item's ID, state, and matching text. Without `-p`, the search covers all active projects.
+
+If nothing matches, tk prints "No results found for ...".
+
 ### Editing Tasks
 
 ```bash
@@ -483,6 +503,7 @@ default_priority: 3
 |---------|-------------|
 | `tk add <title> [options]` | Create a new task |
 | `tk list [filters]` | List tasks |
+| `tk find <query> [-p PROJECT]` | Search tasks and waits by keyword |
 | `tk show <id>` | Show task/wait details |
 | `tk edit <id> [options]` | Edit a task |
 | `tk done <id>...` | Complete task(s) |
@@ -542,6 +563,9 @@ default_priority: 3
 # Morning review: what's actionable?
 tk ready
 tk waiting
+
+# Find something you remember by keyword
+tk find "plumber"
 
 # End of day: what did I complete?
 tk list --done -p default
