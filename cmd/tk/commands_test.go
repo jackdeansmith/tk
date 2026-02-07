@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -9,6 +10,7 @@ import (
 	"time"
 
 	"github.com/jacksmith/tk/internal/model"
+	"github.com/jacksmith/tk/internal/ops"
 	"github.com/jacksmith/tk/internal/storage"
 	"github.com/spf13/cobra"
 	"github.com/stretchr/testify/assert"
@@ -1921,4 +1923,130 @@ func TestTruncate(t *testing.T) {
 			assert.Equal(t, tt.expected, result)
 		})
 	}
+}
+
+// ============= Priority Validation Tests =============
+
+func TestAddCommandInvalidPriority(t *testing.T) {
+	_, _, cleanup := setupTestStorage(t)
+	defer cleanup()
+
+	tests := []struct {
+		name     string
+		priority int
+		wantErr  bool
+	}{
+		{"priority -5 rejected", -5, true},
+		{"priority 0 uses default", 0, false},
+		{"priority 1 accepted", 1, false},
+		{"priority 4 accepted", 4, false},
+		{"priority 5 rejected", 5, true},
+		{"priority 99 rejected", 99, true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			addProject = "TP"
+			addPriority = tt.priority
+			addTags = nil
+			addNotes = ""
+			addAssignee = ""
+			addDueDate = ""
+			addAutoComplete = false
+			addBlockedBy = ""
+
+			err := runAdd(nil, []string{"Test " + tt.name})
+			if tt.wantErr {
+				assert.Error(t, err)
+				assert.Contains(t, err.Error(), "invalid priority")
+			} else {
+				assert.NoError(t, err)
+			}
+		})
+	}
+}
+
+func TestEditCommandInvalidPriority(t *testing.T) {
+	_, _, cleanup := setupTestStorageWithData(t)
+	defer cleanup()
+
+	tests := []struct {
+		name     string
+		priority int
+		wantErr  bool
+	}{
+		{"edit to -1 rejected", -1, true},
+		{"edit to 0 rejected", 0, true},
+		{"edit to 1 accepted", 1, false},
+		{"edit to 4 accepted", 4, false},
+		{"edit to 5 rejected", 5, true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			editPriority = tt.priority
+
+			// Build a minimal cobra command with the flag changed
+			cmd := &cobra.Command{}
+			cmd.Flags().IntVar(&editPriority, "priority", 0, "")
+			cmd.Flags().Set("priority", fmt.Sprintf("%d", tt.priority))
+
+			// Reset other edit flags
+			editTitle = ""
+			editNotes = ""
+			editAssignee = ""
+			editDueDate = ""
+			editClearDueDate = false
+			editAutoComplete = ""
+			editTags = ""
+			editAddTag = nil
+			editRemoveTag = nil
+			editBlockedBy = ""
+			editAddBlockedBy = nil
+			editRemoveBlockedBy = nil
+			editInteractive = false
+
+			err := runEdit(cmd, []string{"TP-01"})
+			if tt.wantErr {
+				assert.Error(t, err)
+				assert.Contains(t, err.Error(), "invalid priority")
+			} else {
+				assert.NoError(t, err)
+			}
+		})
+	}
+}
+
+func TestValidateCommandDetectsInvalidPriority(t *testing.T) {
+	_, s, cleanup := setupTestStorage(t)
+	defer cleanup()
+
+	// Create task with invalid priority directly in storage
+	pf, _ := s.LoadProject("TP")
+	pf.Tasks = append(pf.Tasks, model.Task{
+		ID:       "TP-01",
+		Title:    "Bad priority",
+		Status:   model.TaskStatusOpen,
+		Priority: -5,
+		Created:  time.Now(),
+		Updated:  time.Now(),
+	})
+	pf.NextID = 2
+	s.SaveProject(pf)
+
+	validateFix = false
+
+	// Capture output - runValidateOnly calls os.Exit(1) so we test ops.Validate directly
+	errors, err := ops.Validate(s)
+	assert.NoError(t, err)
+
+	found := false
+	for _, e := range errors {
+		if e.Type == ops.ValidationErrorInvalidPriority {
+			found = true
+			assert.Contains(t, e.Message, "-5")
+			break
+		}
+	}
+	assert.True(t, found, "expected invalid_priority error to be detected")
 }

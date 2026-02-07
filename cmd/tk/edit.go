@@ -100,6 +100,9 @@ func runEdit(cmd *cobra.Command, args []string) error {
 	}
 
 	if cmd.Flags().Changed("priority") {
+		if err := ops.ValidatePriority(editPriority); err != nil {
+			return err
+		}
 		changes.Priority = &editPriority
 		hasChanges = true
 	}
@@ -369,6 +372,9 @@ func runEditInteractive(s *storage.Storage, taskID string) error {
 		changes.Title = &newEditable.Title
 	}
 	if newEditable.Priority != task.Priority {
+		if err := ops.ValidatePriority(newEditable.Priority); err != nil {
+			return err
+		}
 		changes.Priority = &newEditable.Priority
 	}
 	if !stringSliceEqual(newEditable.Tags, task.Tags) {

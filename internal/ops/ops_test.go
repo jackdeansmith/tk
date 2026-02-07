@@ -1856,3 +1856,197 @@ func TestStorageStructure(t *testing.T) {
 		t.Error("default project file should exist")
 	}
 }
+
+// TestValidatePriority tests the ValidatePriority function.
+func TestValidatePriority(t *testing.T) {
+	tests := []struct {
+		name     string
+		priority int
+		wantErr  bool
+	}{
+		{"zero is allowed (default)", 0, false},
+		{"priority 1 is valid", 1, false},
+		{"priority 2 is valid", 2, false},
+		{"priority 3 is valid", 3, false},
+		{"priority 4 is valid", 4, false},
+		{"priority -1 is invalid", -1, true},
+		{"priority -5 is invalid", -5, true},
+		{"priority 5 is invalid", 5, true},
+		{"priority 99 is invalid", 99, true},
+		{"priority -100 is invalid", -100, true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := ValidatePriority(tt.priority)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("ValidatePriority(%d) error = %v, wantErr %v", tt.priority, err, tt.wantErr)
+			}
+		})
+	}
+}
+
+// TestAddTaskInvalidPriority tests that AddTask rejects invalid priorities.
+func TestAddTaskInvalidPriority(t *testing.T) {
+	s, cleanup := setupTestStorage(t)
+	defer cleanup()
+
+	tests := []struct {
+		name     string
+		priority int
+		wantErr  bool
+	}{
+		{"priority 0 uses default", 0, false},
+		{"priority 1 is valid", 1, false},
+		{"priority 4 is valid", 4, false},
+		{"priority -5 is rejected", -5, true},
+		{"priority 5 is rejected", 5, true},
+		{"priority 99 is rejected", 99, true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, err := AddTask(s, "TS", tt.name, TaskOptions{Priority: tt.priority})
+			if (err != nil) != tt.wantErr {
+				t.Errorf("AddTask with priority %d: error = %v, wantErr %v", tt.priority, err, tt.wantErr)
+			}
+		})
+	}
+}
+
+// TestEditTaskInvalidPriority tests that EditTask rejects invalid priorities.
+func TestEditTaskInvalidPriority(t *testing.T) {
+	s, cleanup := setupTestStorage(t)
+	defer cleanup()
+
+	// Create a valid task first
+	AddTask(s, "TS", "Test task", TaskOptions{Priority: 2})
+
+	tests := []struct {
+		name     string
+		priority int
+		wantErr  bool
+	}{
+		{"edit to priority 1", 1, false},
+		{"edit to priority 4", 4, false},
+		{"edit to priority -1", -1, true},
+		{"edit to priority 0", 0, true},
+		{"edit to priority 5", 5, true},
+		{"edit to priority 99", 99, true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			p := tt.priority
+			err := EditTask(s, "TS-01", TaskChanges{Priority: &p})
+			if (err != nil) != tt.wantErr {
+				t.Errorf("EditTask with priority %d: error = %v, wantErr %v", tt.priority, err, tt.wantErr)
+			}
+		})
+	}
+}
+
+// TestValidateInvalidPriority tests that Validate detects invalid priorities.
+func TestValidateInvalidPriority(t *testing.T) {
+	s, cleanup := setupTestStorage(t)
+	defer cleanup()
+
+	// Manually create a task with an invalid priority
+	pf, _ := s.LoadProject("TS")
+	pf.Tasks = append(pf.Tasks, model.Task{
+		ID:       "TS-01",
+		Title:    "Bad priority task",
+		Status:   model.TaskStatusOpen,
+		Priority: -5,
+		Created:  time.Now(),
+		Updated:  time.Now(),
+	})
+	pf.NextID = 2
+	s.SaveProject(pf)
+
+	errors, err := Validate(s)
+	if err != nil {
+		t.Fatalf("Validate failed: %v", err)
+	}
+
+	found := false
+	for _, e := range errors {
+		if e.Type == ValidationErrorInvalidPriority {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Error("expected invalid_priority validation error")
+	}
+}
+
+// TestValidateHighPriority tests that Validate detects priority > 4.
+func TestValidateHighPriority(t *testing.T) {
+	s, cleanup := setupTestStorage(t)
+	defer cleanup()
+
+	// Manually create a task with priority 99
+	pf, _ := s.LoadProject("TS")
+	pf.Tasks = append(pf.Tasks, model.Task{
+		ID:       "TS-01",
+		Title:    "High priority task",
+		Status:   model.TaskStatusOpen,
+		Priority: 99,
+		Created:  time.Now(),
+		Updated:  time.Now(),
+	})
+	pf.NextID = 2
+	s.SaveProject(pf)
+
+	errors, err := Validate(s)
+	if err != nil {
+		t.Fatalf("Validate failed: %v", err)
+	}
+
+	found := false
+	for _, e := range errors {
+		if e.Type == ValidationErrorInvalidPriority {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Error("expected invalid_priority validation error for priority 99")
+	}
+}
+
+// TestValidateZeroPriority tests that Validate detects priority 0 (unset).
+func TestValidateZeroPriority(t *testing.T) {
+	s, cleanup := setupTestStorage(t)
+	defer cleanup()
+
+	// Manually create a task with priority 0
+	pf, _ := s.LoadProject("TS")
+	pf.Tasks = append(pf.Tasks, model.Task{
+		ID:       "TS-01",
+		Title:    "Zero priority task",
+		Status:   model.TaskStatusOpen,
+		Priority: 0,
+		Created:  time.Now(),
+		Updated:  time.Now(),
+	})
+	pf.NextID = 2
+	s.SaveProject(pf)
+
+	errors, err := Validate(s)
+	if err != nil {
+		t.Fatalf("Validate failed: %v", err)
+	}
+
+	found := false
+	for _, e := range errors {
+		if e.Type == ValidationErrorInvalidPriority {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Error("expected invalid_priority validation error for priority 0")
+	}
+}

@@ -136,6 +136,8 @@ func formatValidationErrorType(t ops.ValidationErrorType) string {
 		return cli.Red("[invalid-id]")
 	case ops.ValidationErrorMissingRequired:
 		return cli.Red("[missing]")
+	case ops.ValidationErrorInvalidPriority:
+		return cli.Red("[priority]")
 	default:
 		return fmt.Sprintf("[%s]", t)
 	}

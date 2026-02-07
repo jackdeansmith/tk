@@ -2,17 +2,18 @@ id: default
 prefix: DF
 name: Beta Fixes
 status: active
-next_id: 22
+next_id: 24
 created: 2026-02-06T20:05:10-08:00
 tasks:
     - id: DF-01
       title: Validate priority range (1-4) on add, edit, and ops layers
-      status: open
+      status: done
       priority: 1
       tags: [bug, validation]
       notes: 'tk add --priority -5 and --priority 99 are silently accepted. The list command displays P-5 and P99. The show command says ''Priority: -5 (unknown)''. Priority must be restricted to 1-4 at the add, edit, and ops layers. The validate command should also catch invalid priorities.'
       created: 2026-02-06T20:05:20-08:00
-      updated: 2026-02-06T20:05:20-08:00
+      updated: 2026-02-06T20:25:18-08:00
+      done_at: 2026-02-06T20:25:18-08:00
     - id: DF-02
       title: Reject empty task titles on add and edit
       status: open
@@ -111,67 +112,10 @@ tasks:
       notes: project delete requires --force (good) but does not tell you why caution is needed. It should say something like 'This project has 4 open tasks' before requiring --force.
       created: 2026-02-06T20:06:23-08:00
       updated: 2026-02-06T20:06:23-08:00
-    - id: DF-14
-      title: test priority -5
-      status: dropped
-      priority: -5
-      created: 2026-02-06T20:11:29-08:00
-      updated: 2026-02-06T20:11:34-08:00
-      dropped_at: 2026-02-06T20:11:34-08:00
-      drop_reason: test data
-    - id: DF-15
-      title: test priority 99
-      status: dropped
-      priority: 99
-      created: 2026-02-06T20:11:30-08:00
-      updated: 2026-02-06T20:11:34-08:00
-      dropped_at: 2026-02-06T20:11:34-08:00
-      drop_reason: test data
-    - id: DF-16
-      title: test priority -5
-      status: dropped
-      priority: -5
-      created: 2026-02-06T20:13:08-08:00
-      updated: 2026-02-06T20:13:22-08:00
-      dropped_at: 2026-02-06T20:13:22-08:00
-      drop_reason: test
-    - id: DF-17
-      title: test priority 99
-      status: dropped
-      priority: 99
-      created: 2026-02-06T20:13:08-08:00
-      updated: 2026-02-06T20:13:22-08:00
-      dropped_at: 2026-02-06T20:13:22-08:00
-      drop_reason: test
-    - id: DF-18
-      title: test priority 0
-      status: dropped
-      priority: 3
-      created: 2026-02-06T20:13:09-08:00
-      updated: 2026-02-06T20:13:22-08:00
-      dropped_at: 2026-02-06T20:13:22-08:00
-      drop_reason: test
-    - id: DF-19
-      title: test priority 5
-      status: dropped
-      priority: 5
-      created: 2026-02-06T20:13:10-08:00
-      updated: 2026-02-06T20:13:22-08:00
-      dropped_at: 2026-02-06T20:13:22-08:00
-      drop_reason: test
-    - id: DF-20
-      title: test valid priority
-      status: dropped
-      priority: 2
-      created: 2026-02-06T20:13:27-08:00
-      updated: 2026-02-06T20:13:41-08:00
-      dropped_at: 2026-02-06T20:13:41-08:00
-      drop_reason: test
-    - id: DF-21
-      title: test default priority
-      status: dropped
-      priority: 3
-      created: 2026-02-06T20:13:28-08:00
-      updated: 2026-02-06T20:13:41-08:00
-      dropped_at: 2026-02-06T20:13:41-08:00
-      drop_reason: test
+    - id: DF-23
+      title: Add tk note command that appends to task notes
+      status: open
+      priority: 4
+      tags: [ux]
+      created: 2026-02-06T20:30:20-08:00
+      updated: 2026-02-06T20:30:20-08:00

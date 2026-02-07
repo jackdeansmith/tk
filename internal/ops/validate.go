@@ -18,6 +18,7 @@ const (
 	ValidationErrorDuplicateID     ValidationErrorType = "duplicate_id"
 	ValidationErrorInvalidID       ValidationErrorType = "invalid_id"
 	ValidationErrorMissingRequired ValidationErrorType = "missing_required"
+	ValidationErrorInvalidPriority ValidationErrorType = "invalid_priority"
 )
 
 // ValidationError represents a data integrity issue.
@@ -154,6 +155,17 @@ func validateProject(s *storage.Storage, prefix string) ([]ValidationError, erro
 	g := graph.BuildGraph(pf)
 	cycleErrors := detectCycles(pf, g)
 	errors = append(errors, cycleErrors...)
+
+	// Check for invalid priorities
+	for _, t := range pf.Tasks {
+		if t.Priority < MinPriority || t.Priority > MaxPriority {
+			errors = append(errors, ValidationError{
+				Type:    ValidationErrorInvalidPriority,
+				ItemID:  t.ID,
+				Message: fmt.Sprintf("invalid priority %d: must be between %d and %d", t.Priority, MinPriority, MaxPriority),
+			})
+		}
+	}
 
 	// Check for missing required fields
 	for _, t := range pf.Tasks {

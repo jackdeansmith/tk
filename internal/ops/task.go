@@ -10,6 +10,24 @@ import (
 	"github.com/jacksmith/tk/internal/storage"
 )
 
+// Priority range constants.
+const (
+	MinPriority = 1
+	MaxPriority = 4
+)
+
+// ValidatePriority checks that priority is within the valid range (1-4).
+// A priority of 0 is allowed as it means "use default".
+func ValidatePriority(priority int) error {
+	if priority == 0 {
+		return nil // 0 means "use default"
+	}
+	if priority < MinPriority || priority > MaxPriority {
+		return fmt.Errorf("invalid priority %d: must be between %d and %d", priority, MinPriority, MaxPriority)
+	}
+	return nil
+}
+
 // TaskOptions contains options for creating a new task.
 type TaskOptions struct {
 	Priority     int
@@ -53,6 +71,11 @@ func AddTask(s *storage.Storage, prefix string, title string, opts TaskOptions) 
 	// Validate project is active
 	if pf.Status != model.ProjectStatusActive {
 		return nil, fmt.Errorf("cannot add task to %s project %q", pf.Status, pf.Name)
+	}
+
+	// Validate priority if specified
+	if err := ValidatePriority(opts.Priority); err != nil {
+		return nil, err
 	}
 
 	// Validate blockers if provided
@@ -111,6 +134,14 @@ func EditTask(s *storage.Storage, taskID string, changes TaskChanges) error {
 	task := findTask(pf, taskID)
 	if task == nil {
 		return fmt.Errorf("task %s not found", taskID)
+	}
+
+	// Validate priority if being changed (0 is not valid when explicitly setting)
+	if changes.Priority != nil {
+		p := *changes.Priority
+		if p < MinPriority || p > MaxPriority {
+			return fmt.Errorf("invalid priority %d: must be between %d and %d", p, MinPriority, MaxPriority)
+		}
 	}
 
 	// Validate new blockers if being changed

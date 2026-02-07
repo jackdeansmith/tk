@@ -90,6 +90,13 @@ func runAdd(cmd *cobra.Command, args []string) error {
 		project = pf.Prefix
 	}
 
+	// Validate priority if provided
+	if addPriority != 0 {
+		if err := ops.ValidatePriority(addPriority); err != nil {
+			return err
+		}
+	}
+
 	// Build options
 	opts := ops.TaskOptions{
 		Priority:     addPriority,
