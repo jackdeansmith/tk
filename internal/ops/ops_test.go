@@ -2240,3 +2240,140 @@ func TestEditTaskEmptyTitle(t *testing.T) {
 		})
 	}
 }
+
+// TestValidateTag tests the ValidateTag function.
+func TestValidateTag(t *testing.T) {
+	tests := []struct {
+		name    string
+		tag     string
+		wantErr bool
+	}{
+		{"simple tag is valid", "bug", false},
+		{"hyphenated tag is valid", "high-priority", false},
+		{"tag with underscore is valid", "needs_review", false},
+		{"numeric tag is valid", "v2", false},
+		{"single character tag is valid", "x", false},
+		{"empty string is rejected", "", true},
+		{"whitespace-only is rejected", "   ", true},
+		{"tab-only is rejected", "\t", true},
+		{"tag with space is rejected", "tag with spaces", true},
+		{"tag with leading space is rejected", " tag", true},
+		{"tag with trailing space is rejected", "tag ", true},
+		{"tag with tab is rejected", "tag\ttab", true},
+		{"tag with newline is rejected", "tag\nnewline", true},
+		{"tag with carriage return is rejected", "tag\rreturn", true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := ValidateTag(tt.tag)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("ValidateTag(%q) error = %v, wantErr %v", tt.tag, err, tt.wantErr)
+			}
+		})
+	}
+}
+
+// TestValidateTags tests the ValidateTags function.
+func TestValidateTags(t *testing.T) {
+	tests := []struct {
+		name    string
+		tags    []string
+		wantErr bool
+	}{
+		{"nil tags is valid", nil, false},
+		{"empty slice is valid", []string{}, false},
+		{"single valid tag", []string{"bug"}, false},
+		{"multiple valid tags", []string{"bug", "urgent", "high-priority"}, false},
+		{"one empty tag among valid ones", []string{"bug", "", "urgent"}, true},
+		{"one spaced tag among valid ones", []string{"bug", "has space", "urgent"}, true},
+		{"all empty tags", []string{"", "", ""}, true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := ValidateTags(tt.tags)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("ValidateTags(%v) error = %v, wantErr %v", tt.tags, err, tt.wantErr)
+			}
+		})
+	}
+}
+
+// TestAddTaskRejectsInvalidTags tests that AddTask rejects invalid tags.
+func TestAddTaskRejectsInvalidTags(t *testing.T) {
+	s, cleanup := setupTestStorage(t)
+	defer cleanup()
+
+	tests := []struct {
+		name    string
+		tags    []string
+		wantErr bool
+	}{
+		{"valid tags accepted", []string{"bug", "urgent"}, false},
+		{"empty tag rejected", []string{""}, true},
+		{"whitespace tag rejected", []string{"   "}, true},
+		{"tag with space rejected", []string{"has space"}, true},
+		{"mixed valid and invalid rejected", []string{"bug", "has space"}, true},
+		{"nil tags accepted", nil, false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, err := AddTask(s, "TS", "Task: "+tt.name, TaskOptions{Tags: tt.tags})
+			if (err != nil) != tt.wantErr {
+				t.Errorf("AddTask with tags %v: error = %v, wantErr %v", tt.tags, err, tt.wantErr)
+			}
+		})
+	}
+}
+
+// TestEditTaskRejectsInvalidTags tests that EditTask rejects invalid tags.
+func TestEditTaskRejectsInvalidTags(t *testing.T) {
+	s, cleanup := setupTestStorage(t)
+	defer cleanup()
+
+	// Create a valid task first
+	AddTask(s, "TS", "Test task", TaskOptions{Tags: []string{"original"}})
+
+	tests := []struct {
+		name    string
+		tags    []string
+		wantErr bool
+	}{
+		{"valid tags accepted", []string{"bug", "urgent"}, false},
+		{"empty tag rejected", []string{""}, true},
+		{"whitespace tag rejected", []string{"   "}, true},
+		{"tag with space rejected", []string{"has space"}, true},
+		{"empty slice accepted (clears tags)", []string{}, false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			tags := tt.tags
+			err := EditTask(s, "TS-01", TaskChanges{Tags: &tags})
+			if (err != nil) != tt.wantErr {
+				t.Errorf("EditTask with tags %v: error = %v, wantErr %v", tt.tags, err, tt.wantErr)
+			}
+		})
+	}
+}
+
+// TestValidateTagErrorMessages tests that error messages are descriptive.
+func TestValidateTagErrorMessages(t *testing.T) {
+	err := ValidateTag("")
+	if err == nil {
+		t.Fatal("expected error for empty tag")
+	}
+	if !strings.Contains(err.Error(), "must not be empty") {
+		t.Errorf("expected 'must not be empty' message, got: %v", err)
+	}
+
+	err = ValidateTag("has space")
+	if err == nil {
+		t.Fatal("expected error for tag with space")
+	}
+	if !strings.Contains(err.Error(), "must not contain whitespace") {
+		t.Errorf("expected 'must not contain whitespace' message, got: %v", err)
+	}
+}

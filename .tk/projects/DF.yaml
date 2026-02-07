@@ -25,12 +25,13 @@ tasks:
       done_at: 2026-02-06T20:49:38-08:00
     - id: DF-03
       title: Reject empty and whitespace-containing tags
-      status: open
+      status: done
       priority: 2
       tags: [bug, validation]
       notes: tk tag DF-01 '' succeeds and stores an empty string tag, rendering as [] in list output. Tags with spaces like 'tag with spaces' are also accepted. Empty tags should be rejected, and tags with spaces should either be rejected or normalized to hyphens.
       created: 2026-02-06T20:05:28-08:00
-      updated: 2026-02-06T20:05:28-08:00
+      updated: 2026-02-06T20:57:29-08:00
+      done_at: 2026-02-06T20:57:29-08:00
     - id: DF-04
       title: Fix misleading --force hint on tk done for non-open tasks
       status: done

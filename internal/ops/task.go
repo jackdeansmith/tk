@@ -36,6 +36,29 @@ func ValidatePriority(priority int) error {
 	return nil
 }
 
+// ValidateTag checks that a tag is not empty, not whitespace-only, and
+// contains no whitespace characters. Tags should be simple lowercase tokens
+// like "bug", "urgent", or "high-priority".
+func ValidateTag(tag string) error {
+	if strings.TrimSpace(tag) == "" {
+		return fmt.Errorf("tag must not be empty")
+	}
+	if strings.ContainsAny(tag, " \t\n\r") {
+		return fmt.Errorf("tag %q must not contain whitespace", tag)
+	}
+	return nil
+}
+
+// ValidateTags checks that all tags in a slice are valid.
+func ValidateTags(tags []string) error {
+	for _, tag := range tags {
+		if err := ValidateTag(tag); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 // TaskOptions contains options for creating a new task.
 type TaskOptions struct {
 	Priority     int
@@ -105,6 +128,11 @@ func AddTask(s *storage.Storage, prefix string, title string, opts TaskOptions) 
 		return nil, err
 	}
 
+	// Validate tags if provided
+	if err := ValidateTags(opts.Tags); err != nil {
+		return nil, err
+	}
+
 	// Validate blockers if provided
 	if len(opts.BlockedBy) > 0 {
 		if err := validateBlockers(pf, opts.BlockedBy); err != nil {
@@ -166,6 +194,13 @@ func EditTask(s *storage.Storage, taskID string, changes TaskChanges) error {
 	// Validate title if being changed
 	if changes.Title != nil {
 		if err := ValidateTitle(*changes.Title); err != nil {
+			return err
+		}
+	}
+
+	// Validate tags if being changed
+	if changes.Tags != nil {
+		if err := ValidateTags(*changes.Tags); err != nil {
 			return err
 		}
 	}

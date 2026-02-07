@@ -45,6 +45,10 @@ func runTag(cmd *cobra.Command, args []string) error {
 	taskID := args[0]
 	tag := strings.ToLower(strings.TrimSpace(args[1]))
 
+	if err := ops.ValidateTag(tag); err != nil {
+		return err
+	}
+
 	s, err := storage.Open(".")
 	if err != nil {
 		return err
@@ -95,6 +99,10 @@ func runTag(cmd *cobra.Command, args []string) error {
 func runUntag(cmd *cobra.Command, args []string) error {
 	taskID := args[0]
 	tag := strings.ToLower(strings.TrimSpace(args[1]))
+
+	if err := ops.ValidateTag(tag); err != nil {
+		return err
+	}
 
 	s, err := storage.Open(".")
 	if err != nil {
