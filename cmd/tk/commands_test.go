@@ -1564,7 +1564,7 @@ func TestWaitResolveCommand(t *testing.T) {
 	defer cleanup()
 
 	// Reset flags
-	waitResolveAs = "Package arrived"
+	waitResolveResolution = "Package arrived"
 
 	// Capture output
 	old := os.Stdout
@@ -2440,4 +2440,99 @@ func TestWaitsConflictingFiltersErrorMessage(t *testing.T) {
 	assert.Contains(t, msg, "--actionable")
 	assert.Contains(t, msg, "--dormant")
 	assert.Contains(t, msg, "use only one at a time")
+}
+
+// ============= DF-09: Rename wait resolve --as to --resolution =============
+
+func TestWaitResolveResolutionFlag(t *testing.T) {
+	_, s, cleanup := setupTestStorageWithData(t)
+	defer cleanup()
+
+	// Use the --resolution flag (renamed from --as)
+	waitResolveResolution = "Fabric arrived in good condition"
+
+	// Capture output
+	old := os.Stdout
+	r, w, _ := os.Pipe()
+	os.Stdout = w
+
+	err := runWaitResolve(nil, []string{"TP-01W"})
+
+	w.Close()
+	var buf bytes.Buffer
+	buf.ReadFrom(r)
+	os.Stdout = old
+
+	output := buf.String()
+
+	assert.NoError(t, err)
+	assert.Contains(t, output, "resolved")
+
+	// Verify the resolution description was stored
+	pf, _ := s.LoadProject("TP")
+	var wait *model.Wait
+	for i := range pf.Waits {
+		if pf.Waits[i].ID == "TP-01W" {
+			wait = &pf.Waits[i]
+			break
+		}
+	}
+	assert.Equal(t, model.WaitStatusDone, wait.Status)
+	assert.Equal(t, "Fabric arrived in good condition", wait.Resolution)
+}
+
+func TestWaitResolveWithoutResolutionFlag(t *testing.T) {
+	_, s, cleanup := setupTestStorageWithData(t)
+	defer cleanup()
+
+	// Resolve without providing --resolution
+	waitResolveResolution = ""
+
+	// Capture output
+	old := os.Stdout
+	r, w, _ := os.Pipe()
+	os.Stdout = w
+
+	err := runWaitResolve(nil, []string{"TP-01W"})
+
+	w.Close()
+	var buf bytes.Buffer
+	buf.ReadFrom(r)
+	os.Stdout = old
+
+	output := buf.String()
+
+	assert.NoError(t, err)
+	assert.Contains(t, output, "resolved")
+
+	// Verify the wait was resolved with empty resolution
+	pf, _ := s.LoadProject("TP")
+	var wait *model.Wait
+	for i := range pf.Waits {
+		if pf.Waits[i].ID == "TP-01W" {
+			wait = &pf.Waits[i]
+			break
+		}
+	}
+	assert.Equal(t, model.WaitStatusDone, wait.Status)
+	assert.Equal(t, "", wait.Resolution)
+}
+
+func TestWaitResolveOldAsFlagDoesNotExist(t *testing.T) {
+	// Verify the old --as flag no longer exists on the resolve command
+	flag := waitResolveCmd.Flags().Lookup("as")
+	assert.Nil(t, flag, "the old --as flag should no longer exist; it was renamed to --resolution")
+}
+
+func TestWaitResolveResolutionFlagExists(t *testing.T) {
+	// Verify the new --resolution flag exists on the resolve command
+	flag := waitResolveCmd.Flags().Lookup("resolution")
+	assert.NotNil(t, flag, "the --resolution flag should exist on the wait resolve command")
+	assert.Equal(t, "resolution description", flag.Usage)
+}
+
+func TestWaitResolveHelpShowsResolutionFlag(t *testing.T) {
+	// Verify the help text references --resolution, not --as
+	assert.Contains(t, waitResolveCmd.Long, "--resolution")
+	assert.NotContains(t, waitResolveCmd.Long, "--as=")
 }

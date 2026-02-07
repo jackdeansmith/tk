@@ -78,12 +78,13 @@ tasks:
       updated: 2026-02-06T20:06:02-08:00
     - id: DF-09
       title: Rename wait resolve --as flag to something intuitive
-      status: open
+      status: done
       priority: 3
       tags: [ux]
       notes: The flag for providing a resolution description is --as, which reads like 'resolve as [status]' not 'resolve with [description]'. Consider --resolution, --reason, or --note instead.
       created: 2026-02-06T20:06:07-08:00
-      updated: 2026-02-06T20:06:07-08:00
+      updated: 2026-02-06T21:04:22-08:00
+      done_at: 2026-02-06T21:04:22-08:00
     - id: DF-10
       title: Add --p1 through --p4 shorthands to add and edit commands
       status: open

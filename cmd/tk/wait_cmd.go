@@ -73,7 +73,7 @@ For time waits, this allows early resolution.
 
 Examples:
   tk wait resolve BY-03W
-  tk wait resolve BY-03W --as="Arrived damaged, returning"`,
+  tk wait resolve BY-03W --resolution="Arrived damaged, returning"`,
 	Args:              cobra.ExactArgs(1),
 	RunE:              runWaitResolve,
 	ValidArgsFunction: completeWaitIDs,
@@ -136,7 +136,7 @@ var (
 	waitEditInteractive   bool
 
 	// wait resolve flags
-	waitResolveAs string
+	waitResolveResolution string
 
 	// wait drop flags
 	waitDropReason     string
@@ -175,7 +175,7 @@ func init() {
 	waitCmd.AddCommand(waitEditCmd)
 
 	// wait resolve command
-	waitResolveCmd.Flags().StringVar(&waitResolveAs, "as", "", "resolution description")
+	waitResolveCmd.Flags().StringVar(&waitResolveResolution, "resolution", "", "resolution description")
 	waitCmd.AddCommand(waitResolveCmd)
 
 	// wait drop command
@@ -544,7 +544,7 @@ func runWaitResolve(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	if err := ops.ResolveWait(s, waitID, waitResolveAs); err != nil {
+	if err := ops.ResolveWait(s, waitID, waitResolveResolution); err != nil {
 		return err
 	}
 

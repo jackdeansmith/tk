@@ -330,7 +330,7 @@ tk show BY-03W
 tk wait resolve BY-03W
 
 # Resolve with description
-tk wait resolve BY-03W --as="Package arrived, looks good"
+tk wait resolve BY-03W --resolution="Package arrived, looks good"
 ```
 
 ### Dropping and Deferring Waits
@@ -521,7 +521,7 @@ default_priority: 3
 | `tk waits [filters]` | List waits |
 | `tk wait add [title] -p PROJECT --question=...\|--after=...` | Create wait |
 | `tk wait edit <id> [options]` | Edit a wait |
-| `tk wait resolve <id> [--as=...]` | Resolve a wait |
+| `tk wait resolve <id> [--resolution=...]` | Resolve a wait |
 | `tk wait drop <id> [--reason=...]` | Drop a wait |
 | `tk wait defer <id> --days=N\|--until=DATE` | Defer wait dates |
 
