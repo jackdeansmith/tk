@@ -2050,3 +2050,96 @@ func TestValidateZeroPriority(t *testing.T) {
 		t.Error("expected invalid_priority validation error for priority 0")
 	}
 }
+
+// TestValidateTitle tests the ValidateTitle function.
+func TestValidateTitle(t *testing.T) {
+	tests := []struct {
+		name    string
+		title   string
+		wantErr bool
+	}{
+		{"non-empty title is valid", "Buy groceries", false},
+		{"title with spaces is valid", "  Buy groceries  ", false},
+		{"empty string is rejected", "", true},
+		{"whitespace-only is rejected", "   ", true},
+		{"tab-only is rejected", "\t", true},
+		{"newline-only is rejected", "\n", true},
+		{"mixed whitespace is rejected", " \t\n ", true},
+		{"single character is valid", "x", false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := ValidateTitle(tt.title)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("ValidateTitle(%q) error = %v, wantErr %v", tt.title, err, tt.wantErr)
+			}
+		})
+	}
+}
+
+// TestAddTaskEmptyTitle tests that AddTask rejects empty titles.
+func TestAddTaskEmptyTitle(t *testing.T) {
+	s, cleanup := setupTestStorage(t)
+	defer cleanup()
+
+	tests := []struct {
+		name    string
+		title   string
+		wantErr bool
+	}{
+		{"empty title rejected", "", true},
+		{"whitespace-only title rejected", "   ", true},
+		{"tab-only title rejected", "\t\t", true},
+		{"valid title accepted", "Real task", false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, err := AddTask(s, "TS", tt.title, TaskOptions{})
+			if (err != nil) != tt.wantErr {
+				t.Errorf("AddTask with title %q: error = %v, wantErr %v", tt.title, err, tt.wantErr)
+			}
+			if tt.wantErr && err != nil {
+				if !strings.Contains(err.Error(), "title must not be empty") {
+					t.Errorf("expected error about empty title, got: %v", err)
+				}
+			}
+		})
+	}
+}
+
+// TestEditTaskEmptyTitle tests that EditTask rejects empty titles.
+func TestEditTaskEmptyTitle(t *testing.T) {
+	s, cleanup := setupTestStorage(t)
+	defer cleanup()
+
+	// Create a valid task first
+	AddTask(s, "TS", "Original title", TaskOptions{})
+
+	tests := []struct {
+		name    string
+		title   string
+		wantErr bool
+	}{
+		{"empty title rejected", "", true},
+		{"whitespace-only title rejected", "   ", true},
+		{"tab-only title rejected", "\t", true},
+		{"valid title accepted", "New title", false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			title := tt.title
+			err := EditTask(s, "TS-01", TaskChanges{Title: &title})
+			if (err != nil) != tt.wantErr {
+				t.Errorf("EditTask with title %q: error = %v, wantErr %v", tt.title, err, tt.wantErr)
+			}
+			if tt.wantErr && err != nil {
+				if !strings.Contains(err.Error(), "title must not be empty") {
+					t.Errorf("expected error about empty title, got: %v", err)
+				}
+			}
+		})
+	}
+}

@@ -16,6 +16,14 @@ const (
 	MaxPriority = 4
 )
 
+// ValidateTitle checks that a task title is not empty or whitespace-only.
+func ValidateTitle(title string) error {
+	if strings.TrimSpace(title) == "" {
+		return fmt.Errorf("task title must not be empty")
+	}
+	return nil
+}
+
 // ValidatePriority checks that priority is within the valid range (1-4).
 // A priority of 0 is allowed as it means "use default".
 func ValidatePriority(priority int) error {
@@ -71,6 +79,11 @@ func AddTask(s *storage.Storage, prefix string, title string, opts TaskOptions) 
 	// Validate project is active
 	if pf.Status != model.ProjectStatusActive {
 		return nil, fmt.Errorf("cannot add task to %s project %q", pf.Status, pf.Name)
+	}
+
+	// Validate title
+	if err := ValidateTitle(title); err != nil {
+		return nil, err
 	}
 
 	// Validate priority if specified
@@ -134,6 +147,13 @@ func EditTask(s *storage.Storage, taskID string, changes TaskChanges) error {
 	task := findTask(pf, taskID)
 	if task == nil {
 		return fmt.Errorf("task %s not found", taskID)
+	}
+
+	// Validate title if being changed
+	if changes.Title != nil {
+		if err := ValidateTitle(*changes.Title); err != nil {
+			return err
+		}
 	}
 
 	// Validate priority if being changed (0 is not valid when explicitly setting)
