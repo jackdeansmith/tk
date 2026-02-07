@@ -1,5 +1,7 @@
 # tk User Guide
 
+> **Alpha software.** tk is fully vibe-coded and has not been battle-tested. Do not use it for anything important yet.
+
 A personal task management system with first-class support for external blockers.
 
 ## Table of Contents
