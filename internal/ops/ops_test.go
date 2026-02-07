@@ -2163,6 +2163,11 @@ func TestValidateTitle(t *testing.T) {
 		{"newline-only is rejected", "\n", true},
 		{"mixed whitespace is rejected", " \t\n ", true},
 		{"single character is valid", "x", false},
+		{"title with embedded newline is rejected", "line one\nline two", true},
+		{"title with carriage return is rejected", "line one\rline two", true},
+		{"title with CRLF is rejected", "line one\r\nline two", true},
+		{"title with trailing newline is rejected", "Buy groceries\n", true},
+		{"title with leading newline is rejected", "\nBuy groceries", true},
 	}
 
 	for _, tt := range tests {
@@ -2184,11 +2189,14 @@ func TestAddTaskEmptyTitle(t *testing.T) {
 		name    string
 		title   string
 		wantErr bool
+		errMsg  string
 	}{
-		{"empty title rejected", "", true},
-		{"whitespace-only title rejected", "   ", true},
-		{"tab-only title rejected", "\t\t", true},
-		{"valid title accepted", "Real task", false},
+		{"empty title rejected", "", true, "title must not be empty"},
+		{"whitespace-only title rejected", "   ", true, "title must not be empty"},
+		{"tab-only title rejected", "\t\t", true, "title must not be empty"},
+		{"valid title accepted", "Real task", false, ""},
+		{"title with newline rejected", "line one\nline two", true, "must not contain newlines"},
+		{"title with carriage return rejected", "line one\rline two", true, "must not contain newlines"},
 	}
 
 	for _, tt := range tests {
@@ -2197,9 +2205,9 @@ func TestAddTaskEmptyTitle(t *testing.T) {
 			if (err != nil) != tt.wantErr {
 				t.Errorf("AddTask with title %q: error = %v, wantErr %v", tt.title, err, tt.wantErr)
 			}
-			if tt.wantErr && err != nil {
-				if !strings.Contains(err.Error(), "title must not be empty") {
-					t.Errorf("expected error about empty title, got: %v", err)
+			if tt.wantErr && err != nil && tt.errMsg != "" {
+				if !strings.Contains(err.Error(), tt.errMsg) {
+					t.Errorf("expected error containing %q, got: %v", tt.errMsg, err)
 				}
 			}
 		})
@@ -2218,11 +2226,14 @@ func TestEditTaskEmptyTitle(t *testing.T) {
 		name    string
 		title   string
 		wantErr bool
+		errMsg  string
 	}{
-		{"empty title rejected", "", true},
-		{"whitespace-only title rejected", "   ", true},
-		{"tab-only title rejected", "\t", true},
-		{"valid title accepted", "New title", false},
+		{"empty title rejected", "", true, "title must not be empty"},
+		{"whitespace-only title rejected", "   ", true, "title must not be empty"},
+		{"tab-only title rejected", "\t", true, "title must not be empty"},
+		{"valid title accepted", "New title", false, ""},
+		{"title with newline rejected", "line one\nline two", true, "must not contain newlines"},
+		{"title with carriage return rejected", "line one\rline two", true, "must not contain newlines"},
 	}
 
 	for _, tt := range tests {
@@ -2232,9 +2243,9 @@ func TestEditTaskEmptyTitle(t *testing.T) {
 			if (err != nil) != tt.wantErr {
 				t.Errorf("EditTask with title %q: error = %v, wantErr %v", tt.title, err, tt.wantErr)
 			}
-			if tt.wantErr && err != nil {
-				if !strings.Contains(err.Error(), "title must not be empty") {
-					t.Errorf("expected error about empty title, got: %v", err)
+			if tt.wantErr && err != nil && tt.errMsg != "" {
+				if !strings.Contains(err.Error(), tt.errMsg) {
+					t.Errorf("expected error containing %q, got: %v", tt.errMsg, err)
 				}
 			}
 		})

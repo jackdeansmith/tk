@@ -96,12 +96,13 @@ tasks:
       updated: 2026-02-06T20:06:28-08:00
     - id: DF-11
       title: Reject newlines in task titles
-      status: open
+      status: done
       priority: 3
       tags: [bug, validation]
       notes: tk add 'line one\nline two' creates a task with a multi-line title. This breaks list table formatting since it assumes one row per task.
       created: 2026-02-06T20:06:15-08:00
-      updated: 2026-02-06T20:06:15-08:00
+      updated: 2026-02-06T21:03:52-08:00
+      done_at: 2026-02-06T21:03:52-08:00
     - id: DF-12
       title: Filter empty strings from --tags comma-separated input
       status: open

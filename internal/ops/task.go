@@ -16,10 +16,14 @@ const (
 	MaxPriority = 4
 )
 
-// ValidateTitle checks that a task title is not empty or whitespace-only.
+// ValidateTitle checks that a task title is not empty or whitespace-only,
+// and does not contain newline characters.
 func ValidateTitle(title string) error {
 	if strings.TrimSpace(title) == "" {
 		return fmt.Errorf("task title must not be empty")
+	}
+	if strings.ContainsAny(title, "\n\r") {
+		return fmt.Errorf("task title must not contain newlines")
 	}
 	return nil
 }
