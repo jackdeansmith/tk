@@ -144,6 +144,7 @@ func runList(cmd *cobra.Command, args []string) error {
 
 	// Collect all tasks with filtering
 	table := cli.NewTable()
+	table.SetMaxWidth(3, cli.DefaultMaxTitleWidth) // cap title column
 	now := time.Now()
 	hasResults := false
 

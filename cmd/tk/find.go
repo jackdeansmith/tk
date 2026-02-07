@@ -119,6 +119,7 @@ func runFind(cmd *cobra.Command, args []string) error {
 	if len(taskMatches) > 0 {
 		fmt.Println("Tasks:")
 		table := cli.NewTable()
+		table.SetMaxWidth(2, cli.DefaultMaxTitleWidth) // cap title column
 		for _, m := range taskMatches {
 			table.AddRow(
 				m.task.ID,

@@ -52,12 +52,13 @@ tasks:
       done_at: 2026-02-06T20:56:43-08:00
     - id: DF-06
       title: Truncate or cap long titles in list table output
-      status: open
+      status: done
       priority: 2
       tags: [bug, display]
       notes: A 1000-character title causes every row in tk list to be padded to 1000+ characters wide. The table renderer in output.go calculates column width from the max content. Add a max width or truncate long titles with ellipsis.
       created: 2026-02-06T20:05:49-08:00
-      updated: 2026-02-06T20:05:49-08:00
+      updated: 2026-02-06T20:57:13-08:00
+      done_at: 2026-02-06T20:57:13-08:00
     - id: DF-07
       title: Document the find command in userguide.md
       status: open

@@ -77,15 +77,28 @@ func Gray(s string) string {
 	return colorGray + s + colorReset
 }
 
+// DefaultMaxTitleWidth is the default maximum visible width for title columns.
+const DefaultMaxTitleWidth = 60
+
 // Table formats columnar output with automatic column width calculation.
 type Table struct {
 	rows      [][]string
 	colWidths []int
+	maxWidths map[int]int // optional per-column max visible width
 }
 
 // NewTable creates a new empty table.
 func NewTable() *Table {
 	return &Table{}
+}
+
+// SetMaxWidth sets the maximum visible width for a column.
+// Content exceeding the limit is truncated with an ellipsis ("...").
+func (t *Table) SetMaxWidth(col, maxWidth int) {
+	if t.maxWidths == nil {
+		t.maxWidths = make(map[int]int)
+	}
+	t.maxWidths[col] = maxWidth
 }
 
 // AddRow adds a row to the table.
@@ -98,6 +111,10 @@ func (t *Table) AddRow(cols ...string) {
 	// Update column widths based on visible width (excluding ANSI codes)
 	for i, col := range cols {
 		width := visibleWidth(col)
+		// Cap the tracked width if a max is set for this column
+		if maxW, ok := t.maxWidths[i]; ok && width > maxW {
+			width = maxW
+		}
 		if width > t.colWidths[i] {
 			t.colWidths[i] = width
 		}
@@ -111,6 +128,10 @@ func (t *Table) Render(w io.Writer) {
 	for _, row := range t.rows {
 		var parts []string
 		for i, col := range row {
+			// Truncate if a max width is set for this column
+			if maxW, ok := t.maxWidths[i]; ok {
+				col = Truncate(col, maxW)
+			}
 			if i < len(t.colWidths)-1 {
 				// Pad all columns except the last
 				padding := t.colWidths[i] - visibleWidth(col)
@@ -122,6 +143,82 @@ func (t *Table) Render(w io.Writer) {
 		}
 		fmt.Fprintln(w, strings.Join(parts, "  "))
 	}
+}
+
+// Truncate returns s truncated to maxWidth visible characters. If s exceeds
+// maxWidth, it is cut and "..." is appended (counted within the limit).
+// ANSI escape codes are preserved up to the truncation point with a reset appended.
+// If maxWidth is less than 4, truncation still applies but the ellipsis may use all
+// available space.
+func Truncate(s string, maxWidth int) string {
+	if maxWidth <= 0 {
+		return ""
+	}
+	if visibleWidth(s) <= maxWidth {
+		return s
+	}
+
+	ellipsis := "..."
+	// If the max width can't even fit the ellipsis, just hard-truncate
+	// to maxWidth visible characters.
+	if maxWidth < len(ellipsis) {
+		var result strings.Builder
+		visible := 0
+		inEscape := false
+		for _, r := range s {
+			if r == '\033' {
+				inEscape = true
+				result.WriteRune(r)
+				continue
+			}
+			if inEscape {
+				result.WriteRune(r)
+				if r == 'm' {
+					inEscape = false
+				}
+				continue
+			}
+			if visible >= maxWidth {
+				break
+			}
+			result.WriteRune(r)
+			visible++
+		}
+		return result.String()
+	}
+	limit := maxWidth - len(ellipsis)
+
+	var result strings.Builder
+	visible := 0
+	inEscape := false
+	hasAnsi := false
+
+	for _, r := range s {
+		if r == '\033' {
+			inEscape = true
+			hasAnsi = true
+			result.WriteRune(r)
+			continue
+		}
+		if inEscape {
+			result.WriteRune(r)
+			if r == 'm' {
+				inEscape = false
+			}
+			continue
+		}
+		if visible >= limit {
+			break
+		}
+		result.WriteRune(r)
+		visible++
+	}
+
+	result.WriteString(ellipsis)
+	if hasAnsi {
+		result.WriteString(colorReset)
+	}
+	return result.String()
 }
 
 // visibleWidth returns the visible width of s, excluding ANSI escape codes.

@@ -3,6 +3,7 @@ package cli
 import (
 	"bytes"
 	"os"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -139,6 +140,111 @@ func TestVisibleWidth(t *testing.T) {
 			assert.Equal(t, tt.want, got)
 		})
 	}
+}
+
+func TestTruncatePlainText(t *testing.T) {
+	tests := []struct {
+		name     string
+		input    string
+		maxWidth int
+		want     string
+	}{
+		{"no truncation needed", "hello", 10, "hello"},
+		{"exact fit", "hello", 5, "hello"},
+		{"truncated", "hello world", 8, "hello..."},
+		{"very short max", "hello world", 3, "..."},
+		{"max 1", "hello", 1, "h"},
+		{"max 0", "hello", 0, ""},
+		{"empty string", "", 10, ""},
+		{"long title", strings.Repeat("x", 100), 20, strings.Repeat("x", 17) + "..."},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := Truncate(tt.input, tt.maxWidth)
+			assert.Equal(t, tt.want, got)
+			// visible width must not exceed maxWidth
+			assert.LessOrEqual(t, visibleWidth(got), tt.maxWidth)
+		})
+	}
+}
+
+func TestTruncateWithANSI(t *testing.T) {
+	SetColorEnabled(true)
+	defer SetColorEnabled(false)
+
+	// Green "hello world" - 11 visible chars, truncate to 8
+	colored := Green("hello world")
+	got := Truncate(colored, 8)
+	assert.Equal(t, 8, visibleWidth(got))
+	assert.Contains(t, got, "...")
+	assert.True(t, strings.HasSuffix(got, colorReset), "should end with ANSI reset")
+}
+
+func TestTruncatePreservesShortColoredText(t *testing.T) {
+	SetColorEnabled(true)
+	defer SetColorEnabled(false)
+
+	colored := Green("hi")
+	got := Truncate(colored, 10)
+	assert.Equal(t, colored, got, "should not truncate short colored text")
+}
+
+func TestTableSetMaxWidth(t *testing.T) {
+	table := NewTable()
+	table.SetMaxWidth(1, 10)
+
+	table.AddRow("ID", strings.Repeat("x", 100), "end")
+	table.AddRow("ID", "short", "end")
+
+	var buf bytes.Buffer
+	table.Render(&buf)
+
+	output := buf.String()
+	// The long column should be truncated
+	assert.Contains(t, output, "...")
+	// Column width should be capped at 10, not 100
+	assert.NotContains(t, output, strings.Repeat("x", 100))
+	// Both rows should have "end" as the last column
+	lines := strings.Split(strings.TrimSpace(output), "\n")
+	assert.Len(t, lines, 2)
+	for _, line := range lines {
+		assert.True(t, strings.HasSuffix(strings.TrimSpace(line), "end"))
+	}
+}
+
+func TestTableMaxWidthAlignsProperly(t *testing.T) {
+	table := NewTable()
+	table.SetMaxWidth(2, 15)
+
+	table.AddRow("BY-01", "[ready]", "Short title", "[bug]")
+	table.AddRow("BY-02", "[ready]", "This title is way too long for the column", "[fix]")
+
+	var buf bytes.Buffer
+	table.Render(&buf)
+
+	lines := strings.Split(strings.TrimSpace(buf.String()), "\n")
+	assert.Len(t, lines, 2)
+
+	// Both lines should contain the tag at the end
+	assert.True(t, strings.HasSuffix(strings.TrimSpace(lines[0]), "[bug]"))
+	assert.True(t, strings.HasSuffix(strings.TrimSpace(lines[1]), "[fix]"))
+
+	// The truncated title should end with "..."
+	assert.Contains(t, lines[1], "...")
+}
+
+func TestTableNoMaxWidthUnchangedBehavior(t *testing.T) {
+	// Without SetMaxWidth, the table should behave exactly as before
+	table := NewTable()
+	longTitle := strings.Repeat("z", 200)
+	table.AddRow("ID", longTitle, "end")
+
+	var buf bytes.Buffer
+	table.Render(&buf)
+
+	output := buf.String()
+	assert.Contains(t, output, longTitle, "without max width, long text should not be truncated")
 }
 
 func TestTableUnevenRows(t *testing.T) {
