@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 	"strings"
 
@@ -45,13 +46,18 @@ func runDone(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	var errors []string
+	var errs []string
 	var successes []string
+	hasBlockerError := false
 
 	for _, taskID := range args {
 		result, err := ops.CompleteTask(s, taskID, doneForce)
 		if err != nil {
-			errors = append(errors, fmt.Sprintf("%s: %v", taskID, err))
+			errs = append(errs, fmt.Sprintf("%s: %v", taskID, err))
+			var blockerErr *ops.IncompleteBlockersError
+			if errors.As(err, &blockerErr) {
+				hasBlockerError = true
+			}
 			continue
 		}
 
@@ -72,12 +78,12 @@ func runDone(cmd *cobra.Command, args []string) error {
 	}
 
 	// Report errors
-	if len(errors) > 0 {
+	if len(errs) > 0 {
 		fmt.Println()
-		for _, e := range errors {
+		for _, e := range errs {
 			fmt.Printf("error: %s\n", e)
 		}
-		if !doneForce && len(errors) == len(args) {
+		if !doneForce && hasBlockerError {
 			fmt.Println("\nUse --force to remove blockers and complete anyway.")
 		}
 		// Return error if all failed

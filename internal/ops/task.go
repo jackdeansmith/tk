@@ -59,6 +59,20 @@ type TaskChanges struct {
 	BlockedBy    *[]string
 }
 
+// IncompleteBlockersError indicates that a task cannot be completed because it
+// has incomplete blockers. This is a distinct error type so callers can
+// differentiate blocker errors from other completion failures (e.g. task not
+// found, task not open).
+type IncompleteBlockersError struct {
+	TaskID   string
+	Blockers []string
+}
+
+func (e *IncompleteBlockersError) Error() string {
+	return fmt.Sprintf("task has incomplete blockers: %s (use --force to complete anyway)",
+		strings.Join(e.Blockers, ", "))
+}
+
 // CompletionResult contains the results of completing a task.
 type CompletionResult struct {
 	// Unblocked lists tasks/waits that are now unblocked.
@@ -243,8 +257,10 @@ func CompleteTask(s *storage.Storage, taskID string, force bool) (*CompletionRes
 
 	if len(incompleteBlockers) > 0 {
 		if !force {
-			return nil, fmt.Errorf("task has incomplete blockers: %s (use --force to complete anyway)",
-				strings.Join(incompleteBlockers, ", "))
+			return nil, &IncompleteBlockersError{
+				TaskID:   taskID,
+				Blockers: incompleteBlockers,
+			}
 		}
 		// Remove unfulfilled blockers when forcing
 		task.BlockedBy = removeBlockers(task.BlockedBy, incompleteBlockers)

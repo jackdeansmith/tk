@@ -33,12 +33,13 @@ tasks:
       updated: 2026-02-06T20:05:28-08:00
     - id: DF-04
       title: Fix misleading --force hint on tk done for non-open tasks
-      status: open
+      status: done
       priority: 1
       tags: [bug]
       notes: When running tk done on an already-done or dropped task, the error says 'Use --force to remove blockers and complete anyway' but the problem is the task status, not blockers. --force still fails. The hint should only appear when the error is actually about blockers.
       created: 2026-02-06T20:05:35-08:00
-      updated: 2026-02-06T20:05:35-08:00
+      updated: 2026-02-06T20:49:11-08:00
+      done_at: 2026-02-06T20:49:11-08:00
     - id: DF-05
       title: Error or warn when conflicting list filters are combined
       status: open

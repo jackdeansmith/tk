@@ -991,6 +991,133 @@ func TestDoneCommandForce(t *testing.T) {
 	assert.Empty(t, task.BlockedBy)
 }
 
+// TestDoneCommandNoForceHintForDoneTask verifies that the --force hint is NOT
+// shown when trying to complete an already-done task (DF-04 fix).
+func TestDoneCommandNoForceHintForDoneTask(t *testing.T) {
+	_, _, cleanup := setupTestStorageWithData(t)
+	defer cleanup()
+
+	// TP-04 is already done in the test data
+	doneForce = false
+
+	// Capture output
+	old := os.Stdout
+	r, w, _ := os.Pipe()
+	os.Stdout = w
+
+	err := runDone(nil, []string{"TP-04"})
+
+	w.Close()
+	var buf bytes.Buffer
+	buf.ReadFrom(r)
+	os.Stdout = old
+
+	output := buf.String()
+
+	assert.Error(t, err)
+	assert.Contains(t, output, "not open")
+	assert.NotContains(t, output, "Use --force to remove blockers and complete anyway.")
+}
+
+// TestDoneCommandForceHintForBlockedTask verifies that the --force hint IS
+// shown when trying to complete a task with incomplete blockers.
+func TestDoneCommandForceHintForBlockedTask(t *testing.T) {
+	_, _, cleanup := setupTestStorageWithData(t)
+	defer cleanup()
+
+	// TP-02 is blocked by TP-01 in the test data
+	doneForce = false
+
+	// Capture output
+	old := os.Stdout
+	r, w, _ := os.Pipe()
+	os.Stdout = w
+
+	err := runDone(nil, []string{"TP-02"})
+
+	w.Close()
+	var buf bytes.Buffer
+	buf.ReadFrom(r)
+	os.Stdout = old
+
+	output := buf.String()
+
+	assert.Error(t, err)
+	assert.Contains(t, output, "incomplete blockers")
+	assert.Contains(t, output, "Use --force to remove blockers and complete anyway.")
+}
+
+// TestDoneCommandBatchMixedErrorsShowsHint verifies that in batch mode, the
+// --force hint is shown when at least one error is a blocker error, even if
+// other errors are about task status.
+func TestDoneCommandBatchMixedErrorsShowsHint(t *testing.T) {
+	_, _, cleanup := setupTestStorageWithData(t)
+	defer cleanup()
+
+	// TP-04 is done, TP-02 is blocked
+	doneForce = false
+
+	// Capture output
+	old := os.Stdout
+	r, w, _ := os.Pipe()
+	os.Stdout = w
+
+	err := runDone(nil, []string{"TP-04", "TP-02"})
+
+	w.Close()
+	var buf bytes.Buffer
+	buf.ReadFrom(r)
+	os.Stdout = old
+
+	output := buf.String()
+
+	assert.Error(t, err)
+	assert.Contains(t, output, "not open")
+	assert.Contains(t, output, "incomplete blockers")
+	assert.Contains(t, output, "Use --force to remove blockers and complete anyway.")
+}
+
+// TestDoneCommandBatchAllNonOpenNoHint verifies that in batch mode, the
+// --force hint is NOT shown when all errors are about task status (not blockers).
+func TestDoneCommandBatchAllNonOpenNoHint(t *testing.T) {
+	_, s, cleanup := setupTestStorageWithData(t)
+	defer cleanup()
+
+	// Create a dropped task to have two non-open tasks
+	pf, _ := s.LoadProject("TP")
+	pf.Tasks = append(pf.Tasks, model.Task{
+		ID:       "TP-06",
+		Title:    "Dropped task",
+		Status:   model.TaskStatusDropped,
+		Priority: 3,
+		Created:  time.Now(),
+		Updated:  time.Now(),
+	})
+	pf.NextID = 7
+	s.SaveProject(pf)
+
+	// TP-04 is done, TP-06 is dropped
+	doneForce = false
+
+	// Capture output
+	old := os.Stdout
+	r, w, _ := os.Pipe()
+	os.Stdout = w
+
+	err := runDone(nil, []string{"TP-04", "TP-06"})
+
+	w.Close()
+	var buf bytes.Buffer
+	buf.ReadFrom(r)
+	os.Stdout = old
+
+	output := buf.String()
+
+	assert.Error(t, err)
+	assert.Contains(t, output, "not open")
+	assert.NotContains(t, output, "Use --force to remove blockers and complete anyway.")
+}
+
 func TestDropCommand(t *testing.T) {
 	_, s, cleanup := setupTestStorageWithData(t)
 	defer cleanup()

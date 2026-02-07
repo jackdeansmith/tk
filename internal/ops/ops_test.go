@@ -1,6 +1,7 @@
 package ops
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -1560,6 +1561,102 @@ func TestCompleteAlreadyDone(t *testing.T) {
 	_, err := CompleteTask(s, "TS-01", false)
 	if err == nil {
 		t.Error("expected error when completing already done task")
+	}
+}
+
+// TestCompleteAlreadyDoneErrorType verifies that completing an already-done task
+// does NOT return an IncompleteBlockersError (it should be a plain error about status).
+func TestCompleteAlreadyDoneErrorType(t *testing.T) {
+	s, cleanup := setupTestStorage(t)
+	defer cleanup()
+
+	AddTask(s, "TS", "Task", TaskOptions{})
+	CompleteTask(s, "TS-01", false)
+
+	_, err := CompleteTask(s, "TS-01", false)
+	if err == nil {
+		t.Fatal("expected error when completing already done task")
+	}
+
+	var blockerErr *IncompleteBlockersError
+	if errors.As(err, &blockerErr) {
+		t.Error("completing a done task should NOT return IncompleteBlockersError")
+	}
+
+	if !strings.Contains(err.Error(), "not open") {
+		t.Errorf("expected error to mention 'not open', got: %v", err)
+	}
+}
+
+// TestCompleteDroppedTaskErrorType verifies that completing a dropped task
+// does NOT return an IncompleteBlockersError.
+func TestCompleteDroppedTaskErrorType(t *testing.T) {
+	s, cleanup := setupTestStorage(t)
+	defer cleanup()
+
+	AddTask(s, "TS", "Task", TaskOptions{})
+	DropTask(s, "TS-01", "not needed", false, false)
+
+	_, err := CompleteTask(s, "TS-01", false)
+	if err == nil {
+		t.Fatal("expected error when completing dropped task")
+	}
+
+	var blockerErr *IncompleteBlockersError
+	if errors.As(err, &blockerErr) {
+		t.Error("completing a dropped task should NOT return IncompleteBlockersError")
+	}
+
+	if !strings.Contains(err.Error(), "not open") {
+		t.Errorf("expected error to mention 'not open', got: %v", err)
+	}
+}
+
+// TestCompleteBlockedTaskReturnsBlockerError verifies that completing a task
+// with incomplete blockers returns an IncompleteBlockersError.
+func TestCompleteBlockedTaskReturnsBlockerError(t *testing.T) {
+	s, cleanup := setupTestStorage(t)
+	defer cleanup()
+
+	AddTask(s, "TS", "Blocker", TaskOptions{})
+	AddTask(s, "TS", "Blocked", TaskOptions{BlockedBy: []string{"TS-01"}})
+
+	_, err := CompleteTask(s, "TS-02", false)
+	if err == nil {
+		t.Fatal("expected error when completing blocked task")
+	}
+
+	var blockerErr *IncompleteBlockersError
+	if !errors.As(err, &blockerErr) {
+		t.Fatalf("expected IncompleteBlockersError, got %T: %v", err, err)
+	}
+
+	if blockerErr.TaskID != "TS-02" {
+		t.Errorf("expected TaskID 'TS-02', got %q", blockerErr.TaskID)
+	}
+	if len(blockerErr.Blockers) != 1 || blockerErr.Blockers[0] != "TS-01" {
+		t.Errorf("expected Blockers [TS-01], got %v", blockerErr.Blockers)
+	}
+}
+
+// TestCompleteNotFoundErrorType verifies that completing a non-existent task
+// does NOT return an IncompleteBlockersError.
+func TestCompleteNotFoundErrorType(t *testing.T) {
+	s, cleanup := setupTestStorage(t)
+	defer cleanup()
+
+	_, err := CompleteTask(s, "TS-99", false)
+	if err == nil {
+		t.Fatal("expected error when completing non-existent task")
+	}
+
+	var blockerErr *IncompleteBlockersError
+	if errors.As(err, &blockerErr) {
+		t.Error("completing a non-existent task should NOT return IncompleteBlockersError")
+	}
+
+	if !strings.Contains(err.Error(), "not found") {
+		t.Errorf("expected error to mention 'not found', got: %v", err)
 	}
 }
 
