@@ -2450,7 +2450,6 @@ func TestWaitResolveResolutionFlag(t *testing.T) {
 
 	// Use the --resolution flag (renamed from --as)
 	waitResolveResolution = "Fabric arrived in good condition"
-
 	// Capture output
 	old := os.Stdout
 	r, w, _ := os.Pipe()
@@ -2487,7 +2486,6 @@ func TestWaitResolveWithoutResolutionFlag(t *testing.T) {
 
 	// Resolve without providing --resolution
 	waitResolveResolution = ""
-
 	// Capture output
 	old := os.Stdout
 	r, w, _ := os.Pipe()
@@ -2535,4 +2533,166 @@ func TestWaitResolveHelpShowsResolutionFlag(t *testing.T) {
 	// Verify the help text references --resolution, not --as
 	assert.Contains(t, waitResolveCmd.Long, "--resolution")
 	assert.NotContains(t, waitResolveCmd.Long, "--as=")
+}
+
+// ============= DF-23: Note Command Tests =============
+
+func TestNoteCommandAddsNoteToEmptyNotes(t *testing.T) {
+	_, s, cleanup := setupTestStorageWithData(t)
+	defer cleanup()
+
+	// TP-01 has no notes in the test data
+	// Capture output
+	old := os.Stdout
+	r, w, _ := os.Pipe()
+	os.Stdout = w
+
+	err := runNote(nil, []string{"TP-01", "This", "is", "a", "note"})
+
+	w.Close()
+	var buf bytes.Buffer
+	buf.ReadFrom(r)
+	os.Stdout = old
+
+	output := buf.String()
+
+	assert.NoError(t, err)
+	assert.Contains(t, output, "Note added to TP-01")
+
+	// Verify note was added
+	pf, _ := s.LoadProject("TP")
+	var task *model.Task
+	for i := range pf.Tasks {
+		if pf.Tasks[i].ID == "TP-01" {
+			task = &pf.Tasks[i]
+			break
+		}
+	}
+	assert.Equal(t, "This is a note", task.Notes)
+}
+
+func TestNoteCommandAppendsToExistingNotes(t *testing.T) {
+	_, s, cleanup := setupTestStorageWithData(t)
+	defer cleanup()
+
+	// TP-05 already has notes: "Need to order gravel for the project"
+	// Capture output
+	old := os.Stdout
+	r, w, _ := os.Pipe()
+	os.Stdout = w
+
+	err := runNote(nil, []string{"TP-05", "Also need sand"})
+
+	w.Close()
+	var buf bytes.Buffer
+	buf.ReadFrom(r)
+	os.Stdout = old
+
+	output := buf.String()
+
+	assert.NoError(t, err)
+	assert.Contains(t, output, "Note added to TP-05")
+
+	// Verify note was appended with newline separator
+	pf, _ := s.LoadProject("TP")
+	var task *model.Task
+	for i := range pf.Tasks {
+		if pf.Tasks[i].ID == "TP-05" {
+			task = &pf.Tasks[i]
+			break
+		}
+	}
+	assert.Equal(t, "Need to order gravel for the project\nAlso need sand", task.Notes)
+}
+
+func TestNoteCommandMultipleAppends(t *testing.T) {
+	_, s, cleanup := setupTestStorageWithData(t)
+	defer cleanup()
+
+	// Add three notes to a task with no initial notes (TP-01)
+	err := runNote(nil, []string{"TP-01", "First line"})
+	assert.NoError(t, err)
+
+	err = runNote(nil, []string{"TP-01", "Second line"})
+	assert.NoError(t, err)
+
+	err = runNote(nil, []string{"TP-01", "Third line"})
+	assert.NoError(t, err)
+
+	// Verify all notes are present with newline separators
+	pf, _ := s.LoadProject("TP")
+	var task *model.Task
+	for i := range pf.Tasks {
+		if pf.Tasks[i].ID == "TP-01" {
+			task = &pf.Tasks[i]
+			break
+		}
+	}
+	assert.Equal(t, "First line\nSecond line\nThird line", task.Notes)
+}
+
+func TestNoteCommandJoinsMultipleArgs(t *testing.T) {
+	_, s, cleanup := setupTestStorageWithData(t)
+	defer cleanup()
+
+	// Multiple args should be joined with spaces
+	err := runNote(nil, []string{"TP-01", "hello", "world", "foo"})
+	assert.NoError(t, err)
+
+	pf, _ := s.LoadProject("TP")
+	var task *model.Task
+	for i := range pf.Tasks {
+		if pf.Tasks[i].ID == "TP-01" {
+			task = &pf.Tasks[i]
+			break
+		}
+	}
+	assert.Equal(t, "hello world foo", task.Notes)
+}
+
+func TestNoteCommandInvalidTaskID(t *testing.T) {
+	_, _, cleanup := setupTestStorageWithData(t)
+	defer cleanup()
+
+	err := runNote(nil, []string{"INVALID", "some note"})
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "invalid task ID")
+}
+
+func TestNoteCommandTaskNotFound(t *testing.T) {
+	_, _, cleanup := setupTestStorageWithData(t)
+	defer cleanup()
+
+	err := runNote(nil, []string{"TP-99", "some note"})
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "not found")
+}
+
+func TestNoteCommandEmptyText(t *testing.T) {
+	_, _, cleanup := setupTestStorageWithData(t)
+	defer cleanup()
+
+	err := runNote(nil, []string{"TP-01", "   "})
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "note text must not be empty")
+}
+
+func TestNoteCommandCaseInsensitiveID(t *testing.T) {
+	_, s, cleanup := setupTestStorageWithData(t)
+	defer cleanup()
+
+	// Use lowercase ID
+	err := runNote(nil, []string{"tp-01", "lowercase id note"})
+	assert.NoError(t, err)
+
+	// Verify note was added
+	pf, _ := s.LoadProject("TP")
+	var task *model.Task
+	for i := range pf.Tasks {
+		if pf.Tasks[i].ID == "TP-01" {
+			task = &pf.Tasks[i]
+			break
+		}
+	}
+	assert.Equal(t, "lowercase id note", task.Notes)
 }

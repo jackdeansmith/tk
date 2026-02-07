@@ -122,8 +122,9 @@ tasks:
       updated: 2026-02-06T20:06:23-08:00
     - id: DF-23
       title: Add tk note command that appends to task notes
-      status: open
+      status: done
       priority: 4
       tags: [ux]
       created: 2026-02-06T20:30:20-08:00
-      updated: 2026-02-06T20:30:20-08:00
+      updated: 2026-02-06T21:04:37-08:00
+      done_at: 2026-02-06T21:04:37-08:00
