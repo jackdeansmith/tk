@@ -27,6 +27,17 @@ Key features:
 - **Git-friendly** YAML storage for easy version control
 - **CLI-first** design that works well for humans and scripts
 
+## Design Philosophy
+
+tk is built around a few core principles:
+
+1. **External blockers are explicit** — "Waiting for a package" is different from "blocked by another task". Waits make this distinction first-class.
+2. **Git-friendly storage** — YAML files with sorted IDs produce clean diffs and are easy to inspect by hand.
+3. **CLI-first** — Simple commands that work equally well for humans and scripts/AI agents.
+4. **Keep everything** — Nothing is deleted; status changes are a permanent record.
+5. **Protect against accidents** — Destructive operations require explicit flags.
+6. **Radically simple architecture** — No databases, no caching, no daemons. Just YAML files in a `.tk/` directory.
+
 ## Installation
 
 Build from source:
@@ -35,6 +46,12 @@ Build from source:
 go build -o tk ./cmd/tk
 # Move to somewhere in your PATH
 mv tk /usr/local/bin/
+```
+
+Or install directly with `go install`:
+
+```bash
+go install github.com/jacksmith/tk/cmd/tk@latest
 ```
 
 ## Getting Started
@@ -590,3 +607,36 @@ tk init
 cd ~/work
 tk init --name="Work Tasks" --prefix=WK
 ```
+
+## Storage Format
+
+All data is stored as YAML — one file per project containing all tasks and waits for that project.
+
+```
+.tk/
+  config.yaml           # storage version
+  projects/
+    BY.yaml             # project "backyard" (prefix BY)
+    EL.yaml             # project "electronics" (prefix EL)
+
+.tkconfig.yaml          # user configuration (sibling to .tk/, never auto-generated)
+```
+
+Project files are named by their prefix (e.g., `BY.yaml` for prefix "BY"). This means task ID `BY-07` maps directly to file `BY.yaml` for instant lookup.
+
+Each project file contains the project metadata followed by tasks and waits as sorted lists. Tasks and waits are sorted by numeric ID. Null/empty fields are omitted from the YAML output, and multi-line notes use block scalar style for clean diffs.
+
+You can hand-edit these files directly — they're designed to be human-readable. Use `tk validate` afterward to check for any issues.
+
+## Future Directions
+
+Not in v1, but worth considering for the future:
+
+- **JSON output** — `--json` flag for machine-readable output
+- **Tree walk** — Walk up the directory tree to find `.tk/` like git does
+- **Recurring waits** — "Check on X every week"
+- **Time tracking** — Log time spent on tasks
+- **Sync protocol** — Conflict resolution for multi-device use
+- **Archive command** — Move completed projects out of main storage
+- **Summary dashboard** — `tk status` showing counts across all projects
+- **REST API** — HTTP server mirroring CLI commands
