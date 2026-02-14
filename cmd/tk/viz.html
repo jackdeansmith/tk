@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>tk — Dependency Graph</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { background: #1e1e1e; overflow: hidden; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+svg { width: 100vw; height: 100vh; display: block; }
+.link { stroke-opacity: 0.4; }
+.link.dashed { stroke-dasharray: 6 3; }
+.node-label { fill: #ccc; font-size: 11px; pointer-events: none; text-anchor: middle; }
+.tooltip {
+  position: absolute; background: #2d2d2d; color: #e0e0e0; border: 1px solid #555;
+  border-radius: 6px; padding: 10px 14px; font-size: 13px; pointer-events: none;
+  display: none; max-width: 320px; line-height: 1.5;
+}
+.tooltip .tt-id { font-weight: 700; font-size: 14px; color: #fff; }
+.tooltip .tt-row { color: #aaa; }
+.tooltip .tt-row span { color: #ddd; }
+marker { overflow: visible; }
+</style>
+</head>
+<body>
+<div class="tooltip" id="tooltip"></div>
+<svg id="graph"></svg>
+<script src="https://d3js.org/d3.v7.min.js"></script>
+<script>
+const data = /*GRAPH_DATA*/;
+
+const stateColor = {
+  ready: "#4CAF50", blocked: "#f44336", waiting: "#FFC107",
+  done: "#9E9E9E", dropped: "#616161",
+  actionable: "#4CAF50", pending: "#FFC107", dormant: "#f44336"
+};
+
+const svg = d3.select("#graph");
+const width = window.innerWidth;
+const height = window.innerHeight;
+
+// Count how many items each node blocks (for sizing)
+const blocksCount = {};
+data.edges.forEach(e => { blocksCount[e.source] = (blocksCount[e.source] || 0) + 1; });
+
+const rScale = d3.scaleSqrt().domain([0, d3.max(Object.values(blocksCount)) || 1]).range([6, 18]);
+
+// Arrow markers
+const defs = svg.append("defs");
+["#999","#4CAF50","#f44336","#FFC107","#9E9E9E","#616161"].forEach(c => {
+  defs.append("marker").attr("id", "arrow-" + c.replace("#",""))
+    .attr("viewBox", "0 -4 8 8").attr("refX", 10).attr("refY", 0)
+    .attr("markerWidth", 6).attr("markerHeight", 6).attr("orient", "auto")
+    .append("path").attr("d", "M0,-4L8,0L0,4").attr("fill", c).attr("opacity", 0.6);
+});
+
+const g = svg.append("g");
+
+// Zoom
+const zoom = d3.zoom().scaleExtent([0.1, 8]).on("zoom", e => g.attr("transform", e.transform));
+svg.call(zoom);
+
+const simulation = d3.forceSimulation(data.nodes)
+  .force("link", d3.forceLink(data.edges).id(d => d.id).distance(100))
+  .force("charge", d3.forceManyBody().strength(-300))
+  .force("center", d3.forceCenter(width / 2, height / 2))
+  .force("collide", d3.forceCollide().radius(d => nodeRadius(d) + 10));
+
+const link = g.append("g").selectAll("line")
+  .data(data.edges).join("line")
+  .attr("class", d => "link" + (d.dashed ? " dashed" : ""))
+  .attr("stroke", "#999").attr("stroke-width", 1.5)
+  .attr("marker-end", "url(#arrow-999)");
+
+const node = g.append("g").selectAll(".node")
+  .data(data.nodes).join("g").attr("class", "node");
+
+// Draw shapes
+node.each(function(d) {
+  const el = d3.select(this);
+  const r = nodeRadius(d);
+  const color = stateColor[d.state] || "#9E9E9E";
+  if (d.type === "wait") {
+    el.append("rect").attr("width", r * 1.6).attr("height", r * 1.6)
+      .attr("x", -r * 0.8).attr("y", -r * 0.8)
+      .attr("transform", "rotate(45)")
+      .attr("fill", color).attr("stroke", d3.color(color).brighter(0.5)).attr("stroke-width", 1.5)
+      .attr("rx", 2);
+  } else {
+    el.append("circle").attr("r", r)
+      .attr("fill", color).attr("stroke", d3.color(color).brighter(0.5)).attr("stroke-width", 1.5);
+  }
+});
+
+const labels = g.append("g").selectAll("text")
+  .data(data.nodes).join("text")
+  .attr("class", "node-label")
+  .attr("dy", d => nodeRadius(d) + 14)
+  .text(d => d.id);
+
+// Tooltip
+const tooltip = document.getElementById("tooltip");
+
+node.on("mouseover", function(event, d) {
+  // Highlight connected
+  const connected = new Set([d.id]);
+  data.edges.forEach(e => {
+    const sid = typeof e.source === "object" ? e.source.id : e.source;
+    const tid = typeof e.target === "object" ? e.target.id : e.target;
+    if (sid === d.id) connected.add(tid);
+    if (tid === d.id) connected.add(sid);
+  });
+  node.style("opacity", n => connected.has(n.id) ? 1 : 0.15);
+  link.style("opacity", e => {
+    const sid = typeof e.source === "object" ? e.source.id : e.source;
+    const tid = typeof e.target === "object" ? e.target.id : e.target;
+    return (sid === d.id || tid === d.id) ? 0.8 : 0.05;
+  });
+  labels.style("opacity", n => connected.has(n.id) ? 1 : 0.15);
+
+  let html = `<div class="tt-id">${d.id}</div>`;
+  html += `<div class="tt-row">${d.label}</div>`;
+  html += `<div class="tt-row">State: <span>${d.state}</span></div>`;
+  if (d.priority) html += `<div class="tt-row">Priority: <span>P${d.priority}</span></div>`;
+  if (d.project) html += `<div class="tt-row">Project: <span>${d.project}</span></div>`;
+  if (d.tags && d.tags.length) html += `<div class="tt-row">Tags: <span>${d.tags.join(", ")}</span></div>`;
+  tooltip.innerHTML = html;
+  tooltip.style.display = "block";
+})
+.on("mousemove", function(event) {
+  tooltip.style.left = (event.pageX + 14) + "px";
+  tooltip.style.top = (event.pageY + 14) + "px";
+})
+.on("mouseout", function() {
+  node.style("opacity", 1);
+  link.style("opacity", 0.4);
+  labels.style("opacity", 1);
+  tooltip.style.display = "none";
+});
+
+// Click to pin/unpin
+node.on("click", function(event, d) {
+  if (d.fx != null) { d.fx = null; d.fy = null; }
+  else { d.fx = d.x; d.fy = d.y; }
+  d3.select(this).select("circle, rect").attr("stroke-width", d.fx != null ? 3 : 1.5);
+});
+
+// Drag
+node.call(d3.drag()
+  .on("start", (event, d) => { if (!event.active) simulation.alphaTarget(0.3).restart(); d.fx = d.x; d.fy = d.y; })
+  .on("drag", (event, d) => { d.fx = event.x; d.fy = event.y; })
+  .on("end", (event, d) => { if (!event.active) simulation.alphaTarget(0); })
+);
+
+simulation.on("tick", () => {
+  link.attr("x1", d => d.source.x).attr("y1", d => d.source.y)
+      .attr("x2", d => d.target.x).attr("y2", d => d.target.y);
+  node.attr("transform", d => `translate(${d.x},${d.y})`);
+  labels.attr("x", d => d.x).attr("y", d => d.y);
+});
+
+function nodeRadius(d) {
+  return rScale(blocksCount[d.id] || 0);
+}
+</script>
+</body>
+</html>
