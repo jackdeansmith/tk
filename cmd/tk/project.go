@@ -109,7 +109,6 @@ func init() {
 
 	// Project delete command
 	projectDeleteCmd.Flags().BoolVar(&projectDeleteForce, "force", false, "confirm deletion")
-	projectDeleteCmd.MarkFlagRequired("force")
 	projectCmd.AddCommand(projectDeleteCmd)
 
 	rootCmd.AddCommand(projectCmd)
@@ -396,6 +395,40 @@ func runProjectDelete(cmd *cobra.Command, args []string) error {
 		pf, err = s.LoadProjectByID(projectRef)
 		if err != nil {
 			return fmt.Errorf("project %q not found", projectRef)
+		}
+	}
+
+	// Count open tasks and waits to provide an informative warning
+	if !projectDeleteForce {
+		var openTasks, openWaits int
+		for _, t := range pf.Tasks {
+			if t.Status == model.TaskStatusOpen {
+				openTasks++
+			}
+		}
+		for _, w := range pf.Waits {
+			if w.Status == model.WaitStatusOpen {
+				openWaits++
+			}
+		}
+
+		if openTasks > 0 || openWaits > 0 {
+			parts := []string{}
+			if openTasks > 0 {
+				noun := "task"
+				if openTasks != 1 {
+					noun = "tasks"
+				}
+				parts = append(parts, fmt.Sprintf("%d open %s", openTasks, noun))
+			}
+			if openWaits > 0 {
+				noun := "wait"
+				if openWaits != 1 {
+					noun = "waits"
+				}
+				parts = append(parts, fmt.Sprintf("%d open %s", openWaits, noun))
+			}
+			return fmt.Errorf("project %s has %s (use --force to delete anyway)", pf.Prefix, strings.Join(parts, " and "))
 		}
 	}
 
