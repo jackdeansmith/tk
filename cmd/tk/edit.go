@@ -39,6 +39,10 @@ Examples:
 var (
 	editTitle          string
 	editPriority       int
+	editP1             bool
+	editP2             bool
+	editP3             bool
+	editP4             bool
 	editNotes          string
 	editAssignee       string
 	editDueDate        string
@@ -56,6 +60,10 @@ var (
 func init() {
 	editCmd.Flags().StringVar(&editTitle, "title", "", "set task title")
 	editCmd.Flags().IntVar(&editPriority, "priority", 0, "set task priority (1-4)")
+	editCmd.Flags().BoolVar(&editP1, "p1", false, "shorthand for --priority=1")
+	editCmd.Flags().BoolVar(&editP2, "p2", false, "shorthand for --priority=2")
+	editCmd.Flags().BoolVar(&editP3, "p3", false, "shorthand for --priority=3")
+	editCmd.Flags().BoolVar(&editP4, "p4", false, "shorthand for --priority=4")
 	editCmd.Flags().StringVar(&editNotes, "notes", "", "set task notes")
 	editCmd.Flags().StringVar(&editAssignee, "assignee", "", "set task assignee")
 	editCmd.Flags().StringVar(&editDueDate, "due-date", "", "set due date (YYYY-MM-DD)")
@@ -99,7 +107,18 @@ func runEdit(cmd *cobra.Command, args []string) error {
 		hasChanges = true
 	}
 
-	if cmd.Flags().Changed("priority") {
+	// Resolve priority shorthand
+	if editP1 {
+		editPriority = 1
+	} else if editP2 {
+		editPriority = 2
+	} else if editP3 {
+		editPriority = 3
+	} else if editP4 {
+		editPriority = 4
+	}
+
+	if cmd.Flags().Changed("priority") || editP1 || editP2 || editP3 || editP4 {
 		if err := ops.ValidatePriority(editPriority); err != nil {
 			return err
 		}

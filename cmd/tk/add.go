@@ -27,19 +27,27 @@ Examples:
 }
 
 var (
-	addProject     string
-	addPriority    int
-	addTags        []string
-	addNotes       string
-	addAssignee    string
-	addDueDate     string
+	addProject      string
+	addPriority     int
+	addP1           bool
+	addP2           bool
+	addP3           bool
+	addP4           bool
+	addTags         []string
+	addNotes        string
+	addAssignee     string
+	addDueDate      string
 	addAutoComplete bool
-	addBlockedBy   string
+	addBlockedBy    string
 )
 
 func init() {
 	addCmd.Flags().StringVarP(&addProject, "project", "p", "", "project prefix or ID")
 	addCmd.Flags().IntVar(&addPriority, "priority", 0, "task priority (1-4)")
+	addCmd.Flags().BoolVar(&addP1, "p1", false, "shorthand for --priority=1")
+	addCmd.Flags().BoolVar(&addP2, "p2", false, "shorthand for --priority=2")
+	addCmd.Flags().BoolVar(&addP3, "p3", false, "shorthand for --priority=3")
+	addCmd.Flags().BoolVar(&addP4, "p4", false, "shorthand for --priority=4")
 	addCmd.Flags().StringArrayVar(&addTags, "tag", nil, "add a tag (can be repeated)")
 	addCmd.Flags().StringVar(&addNotes, "notes", "", "task notes")
 	addCmd.Flags().StringVar(&addAssignee, "assignee", "", "task assignee")
@@ -88,6 +96,17 @@ func runAdd(cmd *cobra.Command, args []string) error {
 			}
 		}
 		project = pf.Prefix
+	}
+
+	// Resolve priority shorthand
+	if addP1 {
+		addPriority = 1
+	} else if addP2 {
+		addPriority = 2
+	} else if addP3 {
+		addPriority = 3
+	} else if addP4 {
+		addPriority = 4
 	}
 
 	// Validate priority if provided
