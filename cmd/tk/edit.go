@@ -172,9 +172,11 @@ func handleTagChanges(s *storage.Storage, taskID string, changes *ops.TaskChange
 	if cmd.Flags().Changed("tags") {
 		var tags []string
 		if editTags != "" {
-			tags = strings.Split(editTags, ",")
-			for i, tag := range tags {
-				tags[i] = strings.TrimSpace(tag)
+			for _, tag := range strings.Split(editTags, ",") {
+				tag = strings.TrimSpace(tag)
+				if tag != "" {
+					tags = append(tags, tag)
+				}
 			}
 		}
 		changes.Tags = &tags
