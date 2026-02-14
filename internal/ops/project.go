@@ -37,9 +37,9 @@ func CreateProject(s *storage.Storage, id, prefix, name, description string) err
 		}
 	}
 
-	// Validate ID
+	// Derive ID from prefix if not provided
 	if id == "" {
-		return fmt.Errorf("project ID cannot be empty")
+		id = strings.ToLower(prefix)
 	}
 	id = strings.ToLower(id)
 

@@ -99,7 +99,7 @@ tk done DF-01
 ### Create Additional Projects
 
 ```bash
-tk project new home --prefix=HM --name="Home Improvement"
+tk project new --prefix=HM --name="Home Improvement"
 tk add "Fix leaky faucet" -p HM
 ```
 
@@ -109,7 +109,7 @@ tk add "Fix leaky faucet" -p HM
 
 A **project** is a container for related tasks and waits. Each project has:
 
-- **ID**: A lowercase identifier (e.g., `home`, `backyard`)
+- **ID**: A lowercase identifier, derived from the prefix if not specified (e.g., `hm`, `by`)
 - **Prefix**: 2-3 uppercase letters used in task IDs (e.g., `HM`, `BY`)
 - **Name**: A human-readable display name
 - **Status**: `active`, `paused`, or `done`
@@ -122,7 +122,7 @@ tk projects
 tk project backyard
 
 # Create a new project
-tk project new vacation --prefix=VC --name="Vacation Planning"
+tk project new --prefix=VC --name="Vacation Planning"
 ```
 
 ### Tasks
@@ -492,7 +492,7 @@ default_priority: 3
 | `tk projects` | List all active projects |
 | `tk projects --all` | List all projects including paused/done |
 | `tk project <id>` | Show project summary |
-| `tk project new <id> --prefix=XX --name="Name"` | Create project |
+| `tk project new [id] --prefix=XX --name="Name"` | Create project |
 | `tk project edit <id> [options]` | Edit project |
 | `tk project delete <id> --force` | Delete project |
 | `tk dump <project>` | Export project as plain text |

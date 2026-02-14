@@ -32,16 +32,18 @@ Subcommands:
 }
 
 var projectNewCmd = &cobra.Command{
-	Use:   "new <id>",
+	Use:   "new [id]",
 	Short: "Create a new project",
-	Long: `Create a new project with the given ID.
+	Long: `Create a new project.
 
-The --prefix and --name flags are required.
+The --prefix and --name flags are required. The positional id argument is
+optional; if omitted, the project id is derived from the prefix (lowercased).
 
 Examples:
+  tk project new --prefix=BY --name="Backyard Redo"
   tk project new backyard --prefix=BY --name="Backyard Redo"
-  tk project new electronics --prefix=EL --name="Electronics" --description="PCB projects"`,
-	Args: cobra.ExactArgs(1),
+  tk project new --prefix=EL --name="Electronics" --description="PCB projects"`,
+	Args: cobra.MaximumNArgs(1),
 	RunE: runProjectNew,
 }
 
@@ -239,7 +241,10 @@ func computeBlockerStates(pf *model.ProjectFile) model.BlockerStatus {
 }
 
 func runProjectNew(cmd *cobra.Command, args []string) error {
-	projectID := args[0]
+	projectID := ""
+	if len(args) > 0 {
+		projectID = args[0]
+	}
 
 	s, err := storage.Open(".")
 	if err != nil {
