@@ -70,12 +70,13 @@ tasks:
       done_at: 2026-02-06T21:03:19-08:00
     - id: DF-08
       title: Simplify project new to remove redundant id argument
-      status: open
+      status: done
       priority: 2
       tags: [ux]
       notes: 'project new requires three identifiers: tk project new backyard --prefix BY --name ''Backyard Redo''. The positional id (''backyard'') is invisible in tk projects output and mostly redundant. Consider making prefix the primary identifier and deriving id from it, or making id optional.'
       created: 2026-02-06T20:06:02-08:00
-      updated: 2026-02-06T20:06:02-08:00
+      updated: 2026-02-13T17:46:13-08:00
+      done_at: 2026-02-13T17:46:13-08:00
     - id: DF-09
       title: Rename wait resolve --as flag to something intuitive
       status: done
@@ -87,13 +88,14 @@ tasks:
       done_at: 2026-02-06T21:04:22-08:00
     - id: DF-10
       title: Add --p1 through --p4 shorthands to add and edit commands
-      status: open
+      status: done
       priority: 3
       blocked_by: [DF-01]
       tags: [ux]
       notes: tk list --p1 works but tk add --p1 does not (unknown flag). Users expect priority shorthands to work everywhere --priority does.
       created: 2026-02-06T20:06:11-08:00
-      updated: 2026-02-06T20:06:28-08:00
+      updated: 2026-02-13T17:46:03-08:00
+      done_at: 2026-02-13T17:46:03-08:00
     - id: DF-11
       title: Reject newlines in task titles
       status: done
@@ -105,21 +107,23 @@ tasks:
       done_at: 2026-02-06T21:03:52-08:00
     - id: DF-12
       title: Filter empty strings from --tags comma-separated input
-      status: open
+      status: done
       priority: 4
       blocked_by: [DF-03]
       tags: [bug, validation]
       notes: tk edit DF-01 --tags='foo,,bar' creates three tags including an empty string in the middle. Split-and-trim logic should filter out empty entries.
       created: 2026-02-06T20:06:19-08:00
-      updated: 2026-02-06T20:06:28-08:00
+      updated: 2026-02-13T17:45:52-08:00
+      done_at: 2026-02-13T17:45:52-08:00
     - id: DF-13
       title: Add open-task warning to project delete
-      status: open
+      status: done
       priority: 4
       tags: [ux]
       notes: project delete requires --force (good) but does not tell you why caution is needed. It should say something like 'This project has 4 open tasks' before requiring --force.
       created: 2026-02-06T20:06:23-08:00
-      updated: 2026-02-06T20:06:23-08:00
+      updated: 2026-02-13T17:45:57-08:00
+      done_at: 2026-02-13T17:45:57-08:00
     - id: DF-23
       title: Add tk note command that appends to task notes
       status: done
