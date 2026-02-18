@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"os"
 	"strings"
-	"time"
 
 	"github.com/jacksmith/tk/internal/cli"
 	"github.com/jacksmith/tk/internal/model"
@@ -79,7 +78,6 @@ func init() {
 }
 
 func runList(cmd *cobra.Command, args []string) error {
-	// Validate that conflicting status filters are not combined
 	if err := validateListStatusFilters(); err != nil {
 		return err
 	}
@@ -89,155 +87,65 @@ func runList(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	// Run autocheck if configured
-	cfg, err := s.LoadConfig()
+	ops.AutoCheck(s)
+
+	// Build filter from flags
+	filter := ops.TaskFilter{
+		Project:  listProject,
+		All:      listAll,
+		Priority: resolvePriorityShorthand(listPriority, listP1, listP2, listP3, listP4),
+		Tags:     listTags,
+		Overdue:  listOverdue,
+	}
+	if state := resolveTaskStateFilter(); state != nil {
+		filter.State = state
+	}
+
+	results, err := ops.ListTasks(s, filter)
 	if err != nil {
 		return err
 	}
-	if cfg.AutoCheck {
-		_, _ = ops.RunCheck(s)
-	}
 
-	// Resolve priority shorthand
-	priority := listPriority
-	if listP1 {
-		priority = 1
-	} else if listP2 {
-		priority = 2
-	} else if listP3 {
-		priority = 3
-	} else if listP4 {
-		priority = 4
-	}
-
-	// Determine which projects to include
-	var projects []*model.ProjectFile
-
-	if listProject != "" {
-		// Single project specified
-		pf, err := s.LoadProject(listProject)
-		if err != nil {
-			pf, err = s.LoadProjectByID(listProject)
-			if err != nil {
-				return fmt.Errorf("project %q not found", listProject)
-			}
-		}
-		projects = append(projects, pf)
-	} else {
-		// All active projects
-		prefixes, err := s.ListProjects()
-		if err != nil {
-			return err
-		}
-		for _, prefix := range prefixes {
-			pf, err := s.LoadProject(prefix)
-			if err != nil {
-				continue
-			}
-			// Only include active projects unless --all
-			if !listAll && pf.Status != model.ProjectStatusActive {
-				continue
-			}
-			projects = append(projects, pf)
-		}
-	}
-
-	// Collect all tasks with filtering
-	table := cli.NewTable()
-	table.SetMaxWidth(3, cli.DefaultMaxTitleWidth) // cap title column
-	now := time.Now()
-	hasResults := false
-
-	for _, pf := range projects {
-		blockerStates := computeBlockerStates(pf)
-
-		for _, t := range pf.Tasks {
-			if shouldIncludeTask(&t, blockerStates, priority, now) {
-				hasResults = true
-				state := model.ComputeTaskState(&t, blockerStates)
-				table.AddRow(
-					t.ID,
-					formatTaskState(state),
-					formatPriority(t.Priority),
-					t.Title,
-					formatTags(t.Tags),
-				)
-			}
-		}
-	}
-
-	if !hasResults {
+	if len(results) == 0 {
 		fmt.Println("No tasks found.")
 		return nil
 	}
 
+	table := cli.NewTable()
+	table.SetMaxWidth(3, cli.DefaultMaxTitleWidth)
+	for _, r := range results {
+		table.AddRow(
+			r.Task.ID,
+			formatTaskState(r.State),
+			formatPriority(r.Task.Priority),
+			r.Task.Title,
+			formatTags(r.Task.Tags),
+		)
+	}
 	table.Render(os.Stdout)
 	return nil
 }
 
-func shouldIncludeTask(t *model.Task, blockerStates model.BlockerStatus, priority int, now time.Time) bool {
-	state := model.ComputeTaskState(t, blockerStates)
-
-	// Status filters
-	if listDone {
-		if state != model.TaskStateDone {
-			return false
-		}
-	} else if listDropped {
-		if state != model.TaskStateDropped {
-			return false
-		}
-	} else if listReady {
-		if state != model.TaskStateReady {
-			return false
-		}
-	} else if listBlocked {
-		if state != model.TaskStateBlocked {
-			return false
-		}
-	} else if listWaiting {
-		if state != model.TaskStateWaiting {
-			return false
-		}
-	} else if !listAll {
-		// Default: show only open tasks
-		if t.Status != model.TaskStatusOpen {
-			return false
-		}
+// resolveTaskStateFilter maps the boolean status flags to a *model.TaskState.
+func resolveTaskStateFilter() *model.TaskState {
+	var state model.TaskState
+	switch {
+	case listReady:
+		state = model.TaskStateReady
+	case listBlocked:
+		state = model.TaskStateBlocked
+	case listWaiting:
+		state = model.TaskStateWaiting
+	case listDone:
+		state = model.TaskStateDone
+	case listDropped:
+		state = model.TaskStateDropped
+	default:
+		return nil
 	}
-
-	// Priority filter
-	if priority > 0 && t.Priority != priority {
-		return false
-	}
-
-	// Tag filter (AND logic - must have all specified tags)
-	if len(listTags) > 0 {
-		taskTags := make(map[string]bool)
-		for _, tag := range t.Tags {
-			taskTags[strings.ToLower(tag)] = true
-		}
-		for _, requiredTag := range listTags {
-			if !taskTags[strings.ToLower(requiredTag)] {
-				return false
-			}
-		}
-	}
-
-	// Overdue filter
-	if listOverdue {
-		if t.DueDate == nil || !t.DueDate.Before(now) {
-			return false
-		}
-	}
-
-	return true
+	return &state
 }
 
-// validateListStatusFilters checks that at most one status filter is active.
-// Status filters (--ready, --blocked, --waiting, --done, --dropped, --all) are
-// mutually exclusive. Using more than one produces confusing results because a
-// task can only be in one state at a time.
 func validateListStatusFilters() error {
 	var active []string
 	if listReady {
@@ -263,6 +171,22 @@ func validateListStatusFilters() error {
 		return fmt.Errorf("conflicting status filters: %s (use only one at a time)", strings.Join(active, ", "))
 	}
 	return nil
+}
+
+// resolvePriorityShorthand resolves --p1/--p2/--p3/--p4 flags into a priority int.
+func resolvePriorityShorthand(priority int, p1, p2, p3, p4 bool) int {
+	switch {
+	case p1:
+		return 1
+	case p2:
+		return 2
+	case p3:
+		return 3
+	case p4:
+		return 4
+	default:
+		return priority
+	}
 }
 
 func formatTaskState(state model.TaskState) string {

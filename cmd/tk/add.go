@@ -55,7 +55,6 @@ func init() {
 	addCmd.Flags().BoolVar(&addAutoComplete, "auto-complete", false, "auto-complete when blockers done")
 	addCmd.Flags().StringVar(&addBlockedBy, "blocked-by", "", "comma-separated blocker IDs")
 
-	// Register completion functions
 	addCmd.RegisterFlagCompletionFunc("project", completeProjectIDs)
 	addCmd.RegisterFlagCompletionFunc("tag", completeTags)
 
@@ -70,62 +69,28 @@ func runAdd(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	// Determine project
-	project := addProject
-	if project == "" {
-		cfg, err := s.LoadConfig()
-		if err != nil {
-			return err
-		}
-		if cfg.DefaultProject == "" {
-			return fmt.Errorf("no project specified and no default_project in config")
-		}
-		// Load the default project to get its prefix
-		pf, err := s.LoadProjectByID(cfg.DefaultProject)
-		if err != nil {
-			return fmt.Errorf("default project %q not found", cfg.DefaultProject)
-		}
-		project = pf.Prefix
-	} else {
-		// Try to resolve project reference (could be prefix or ID)
-		pf, err := s.LoadProject(project)
-		if err != nil {
-			pf, err = s.LoadProjectByID(project)
-			if err != nil {
-				return fmt.Errorf("project %q not found", project)
-			}
-		}
-		project = pf.Prefix
+	// Resolve project (uses default from config if empty)
+	pf, err := ops.ResolveProject(s, addProject)
+	if err != nil {
+		return err
 	}
 
-	// Resolve priority shorthand
-	if addP1 {
-		addPriority = 1
-	} else if addP2 {
-		addPriority = 2
-	} else if addP3 {
-		addPriority = 3
-	} else if addP4 {
-		addPriority = 4
-	}
+	priority := resolvePriorityShorthand(addPriority, addP1, addP2, addP3, addP4)
 
-	// Validate priority if provided
-	if addPriority != 0 {
-		if err := ops.ValidatePriority(addPriority); err != nil {
+	if priority != 0 {
+		if err := ops.ValidatePriority(priority); err != nil {
 			return err
 		}
 	}
 
-	// Build options
 	opts := ops.TaskOptions{
-		Priority:     addPriority,
+		Priority:     priority,
 		Tags:         addTags,
 		Notes:        addNotes,
 		Assignee:     addAssignee,
 		AutoComplete: addAutoComplete,
 	}
 
-	// Parse due date if provided
 	if addDueDate != "" {
 		t, err := time.Parse("2006-01-02", addDueDate)
 		if err != nil {
@@ -134,10 +99,8 @@ func runAdd(cmd *cobra.Command, args []string) error {
 		opts.DueDate = &t
 	}
 
-	// Parse blocked-by if provided
 	if addBlockedBy != "" {
 		opts.BlockedBy = strings.Split(addBlockedBy, ",")
-		// Trim whitespace from each ID
 		for i, id := range opts.BlockedBy {
 			opts.BlockedBy[i] = strings.TrimSpace(id)
 		}
@@ -151,7 +114,7 @@ func runAdd(cmd *cobra.Command, args []string) error {
 		}
 	}
 
-	task, err := ops.AddTask(s, project, title, opts)
+	task, err := ops.AddTask(s, pf.Prefix, title, opts)
 	if err != nil {
 		return err
 	}

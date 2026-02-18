@@ -6,6 +6,7 @@ import (
 
 	"github.com/jacksmith/tk/internal/cli"
 	"github.com/jacksmith/tk/internal/model"
+	"github.com/jacksmith/tk/internal/ops"
 	"github.com/jacksmith/tk/internal/storage"
 	"github.com/spf13/cobra"
 )
@@ -33,36 +34,20 @@ func runProjects(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	prefixes, err := s.ListProjects()
+	infos, err := ops.ListProjectInfos(s, projectsAll)
 	if err != nil {
 		return err
 	}
 
-	if len(prefixes) == 0 {
+	if len(infos) == 0 {
 		fmt.Println("No projects found.")
 		return nil
 	}
 
 	table := cli.NewTable()
-
-	for _, prefix := range prefixes {
-		pf, err := s.LoadProject(prefix)
-		if err != nil {
-			// Skip projects that can't be loaded
-			continue
-		}
-
-		// Filter by status unless --all is specified
-		if !projectsAll && pf.Status != model.ProjectStatusActive {
-			continue
-		}
-
-		// Format status with color
-		statusStr := formatProjectStatus(pf.Status)
-
-		table.AddRow(pf.Prefix, pf.Name, statusStr)
+	for _, info := range infos {
+		table.AddRow(info.Prefix, info.Name, formatProjectStatus(info.Status))
 	}
-
 	table.Render(os.Stdout)
 	return nil
 }

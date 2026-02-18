@@ -3,10 +3,8 @@ package main
 import (
 	"fmt"
 	"os"
-	"strings"
 
 	"github.com/jacksmith/tk/internal/cli"
-	"github.com/jacksmith/tk/internal/graph"
 	"github.com/jacksmith/tk/internal/model"
 	"github.com/jacksmith/tk/internal/ops"
 	"github.com/jacksmith/tk/internal/storage"
@@ -137,22 +135,9 @@ func runBlockedBy(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	// Find the item's blockers
-	var blockers []string
-	if model.IsWaitID(id) {
-		for _, w := range pf.Waits {
-			if strings.EqualFold(w.ID, id) {
-				blockers = w.BlockedBy
-				break
-			}
-		}
-	} else {
-		for _, t := range pf.Tasks {
-			if strings.EqualFold(t.ID, id) {
-				blockers = t.BlockedBy
-				break
-			}
-		}
+	blockers, err := ops.GetBlockers(s, id)
+	if err != nil {
+		return err
 	}
 
 	if len(blockers) == 0 {
@@ -162,8 +147,8 @@ func runBlockedBy(cmd *cobra.Command, args []string) error {
 
 	table := cli.NewTable()
 	for _, blockerID := range blockers {
-		info := getBlockerInfo(pf, blockerID)
-		table.AddRow(info)
+		info := ops.GetBlockerInfo(pf, blockerID)
+		table.AddRow(info.ID, formatStatusBracket(info.Status), info.DisplayText)
 	}
 	table.Render(os.Stdout)
 	return nil
@@ -187,8 +172,10 @@ func runBlocking(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	g := graph.BuildGraph(pf)
-	blocking := g.Blocking(id)
+	blocking, err := ops.GetBlocking(s, id)
+	if err != nil {
+		return err
+	}
 
 	if len(blocking) == 0 {
 		fmt.Printf("%s is not blocking anything.\n", id)
@@ -197,8 +184,8 @@ func runBlocking(cmd *cobra.Command, args []string) error {
 
 	table := cli.NewTable()
 	for _, blockedID := range blocking {
-		info := getBlockerInfo(pf, blockedID)
-		table.AddRow(info)
+		info := ops.GetBlockerInfo(pf, blockedID)
+		table.AddRow(info.ID, formatStatusBracket(info.Status), info.DisplayText)
 	}
 	table.Render(os.Stdout)
 	return nil

@@ -77,38 +77,20 @@ func runViz(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	cfg, err := s.LoadConfig()
-	if err != nil {
-		return err
-	}
-	if cfg.AutoCheck {
-		_, _ = ops.RunCheck(s)
-	}
+	ops.AutoCheck(s)
 
 	var projects []*model.ProjectFile
-
 	if vizProject != "" {
-		pf, err := s.LoadProject(vizProject)
-		if err != nil {
-			pf, err = s.LoadProjectByID(vizProject)
-			if err != nil {
-				return fmt.Errorf("project %q not found", vizProject)
-			}
-		}
-		projects = append(projects, pf)
-	} else {
-		prefixes, err := s.ListProjects()
+		pf, err := ops.ResolveProject(s, vizProject)
 		if err != nil {
 			return err
 		}
-		for _, prefix := range prefixes {
-			pf, err := s.LoadProject(prefix)
-			if err != nil {
-				continue
-			}
-			if pf.Status == model.ProjectStatusActive {
-				projects = append(projects, pf)
-			}
+		projects = append(projects, pf)
+	} else {
+		var err error
+		projects, err = ops.LoadActiveProjects(s, false)
+		if err != nil {
+			return err
 		}
 	}
 
@@ -117,7 +99,7 @@ func runViz(cmd *cobra.Command, args []string) error {
 	nodeSet := make(map[string]bool)
 
 	for _, pf := range projects {
-		blockerStates := computeBlockerStates(pf)
+		blockerStates := ops.ComputeBlockerStates(pf)
 
 		for _, t := range pf.Tasks {
 			state := model.ComputeTaskState(&t, blockerStates)

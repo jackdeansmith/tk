@@ -7,7 +7,6 @@ import (
 
 	"github.com/jacksmith/tk/internal/graph"
 	"github.com/jacksmith/tk/internal/model"
-	"github.com/jacksmith/tk/internal/storage"
 )
 
 // Priority range constants.
@@ -111,7 +110,7 @@ type CompletionResult struct {
 }
 
 // AddTask creates a new task in the given project.
-func AddTask(s *storage.Storage, prefix string, title string, opts TaskOptions) (*model.Task, error) {
+func AddTask(s Store, prefix string, title string, opts TaskOptions) (*model.Task, error) {
 	pf, err := s.LoadProject(prefix)
 	if err != nil {
 		return nil, err
@@ -179,7 +178,7 @@ func AddTask(s *storage.Storage, prefix string, title string, opts TaskOptions) 
 }
 
 // EditTask modifies an existing task.
-func EditTask(s *storage.Storage, taskID string, changes TaskChanges) error {
+func EditTask(s Store, taskID string, changes TaskChanges) error {
 	prefix := model.ExtractPrefix(taskID)
 	if prefix == "" {
 		return fmt.Errorf("invalid task ID: %s", taskID)
@@ -265,7 +264,7 @@ func EditTask(s *storage.Storage, taskID string, changes TaskChanges) error {
 // CompleteTask marks a task as done.
 // If force is false and the task has incomplete blockers, returns an error.
 // Returns information about cascading effects (unblocked items, auto-completed tasks).
-func CompleteTask(s *storage.Storage, taskID string, force bool) (*CompletionResult, error) {
+func CompleteTask(s Store, taskID string, force bool) (*CompletionResult, error) {
 	prefix := model.ExtractPrefix(taskID)
 	if prefix == "" {
 		return nil, fmt.Errorf("invalid task ID: %s", taskID)
@@ -286,7 +285,7 @@ func CompleteTask(s *storage.Storage, taskID string, force bool) (*CompletionRes
 	}
 
 	// Check for incomplete blockers
-	blockerStates := computeBlockerStates(pf)
+	blockerStates := ComputeBlockerStates(pf)
 	incompleteBlockers := []string{}
 	for _, blockerID := range task.BlockedBy {
 		if resolved, ok := blockerStates[blockerID]; !ok || !resolved {
@@ -422,7 +421,7 @@ func processAutoComplete(pf *model.ProjectFile, blockerStates model.BlockerStatu
 // DropTask marks a task as dropped.
 // If dropDeps is true, dependent items are also dropped recursively.
 // If removeDeps is true, this task is removed from dependents' blocked_by lists.
-func DropTask(s *storage.Storage, taskID string, reason string, dropDeps, removeDeps bool) error {
+func DropTask(s Store, taskID string, reason string, dropDeps, removeDeps bool) error {
 	prefix := model.ExtractPrefix(taskID)
 	if prefix == "" {
 		return fmt.Errorf("invalid task ID: %s", taskID)
@@ -521,7 +520,7 @@ func removeSelfFromDependents(pf *model.ProjectFile, id string) {
 }
 
 // ReopenTask reopens a done or dropped task.
-func ReopenTask(s *storage.Storage, taskID string) error {
+func ReopenTask(s Store, taskID string) error {
 	prefix := model.ExtractPrefix(taskID)
 	if prefix == "" {
 		return fmt.Errorf("invalid task ID: %s", taskID)
@@ -552,7 +551,7 @@ func ReopenTask(s *storage.Storage, taskID string) error {
 
 // DeferTask defers a task by creating a time-based wait.
 // Returns error if the task already has open waits.
-func DeferTask(s *storage.Storage, taskID string, until time.Time) (*model.Wait, error) {
+func DeferTask(s Store, taskID string, until time.Time) (*model.Wait, error) {
 	prefix := model.ExtractPrefix(taskID)
 	if prefix == "" {
 		return nil, fmt.Errorf("invalid task ID: %s", taskID)
@@ -610,7 +609,7 @@ func DeferTask(s *storage.Storage, taskID string, until time.Time) (*model.Wait,
 }
 
 // MoveTask moves a task to a different project.
-func MoveTask(s *storage.Storage, taskID string, toPrefix string) error {
+func MoveTask(s Store, taskID string, toPrefix string) error {
 	fromPrefix := model.ExtractPrefix(taskID)
 	if fromPrefix == "" {
 		return fmt.Errorf("invalid task ID: %s", taskID)
@@ -688,7 +687,7 @@ func MoveTask(s *storage.Storage, taskID string, toPrefix string) error {
 }
 
 // AddBlocker adds a blocker to a task.
-func AddBlocker(s *storage.Storage, taskID, blockerID string) error {
+func AddBlocker(s Store, taskID, blockerID string) error {
 	prefix := model.ExtractPrefix(taskID)
 	if prefix == "" {
 		return fmt.Errorf("invalid task ID: %s", taskID)
@@ -729,7 +728,7 @@ func AddBlocker(s *storage.Storage, taskID, blockerID string) error {
 }
 
 // RemoveBlocker removes a blocker from a task.
-func RemoveBlocker(s *storage.Storage, taskID, blockerID string) error {
+func RemoveBlocker(s Store, taskID, blockerID string) error {
 	prefix := model.ExtractPrefix(taskID)
 	if prefix == "" {
 		return fmt.Errorf("invalid task ID: %s", taskID)
@@ -847,8 +846,8 @@ func normalizeBlockerIDs(ids []string, maxID int) []string {
 	return result
 }
 
-// computeBlockerStates builds a map of ID -> resolved status for all items.
-func computeBlockerStates(pf *model.ProjectFile) model.BlockerStatus {
+// ComputeBlockerStates builds a map of ID -> resolved status for all items.
+func ComputeBlockerStates(pf *model.ProjectFile) model.BlockerStatus {
 	states := make(model.BlockerStatus)
 	for _, t := range pf.Tasks {
 		states[t.ID] = t.Status == model.TaskStatusDone || t.Status == model.TaskStatusDropped

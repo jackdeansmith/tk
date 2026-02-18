@@ -4,7 +4,6 @@ import (
 	"time"
 
 	"github.com/jacksmith/tk/internal/model"
-	"github.com/jacksmith/tk/internal/storage"
 )
 
 // CheckResult contains the results of running auto-resolution check.
@@ -19,12 +18,12 @@ type CheckResult struct {
 
 // RunCheck auto-resolves time-based waits that have passed their 'after' date.
 // Returns information about all cascading effects.
-func RunCheck(s *storage.Storage) (*CheckResult, error) {
+func RunCheck(s Store) (*CheckResult, error) {
 	return RunCheckAt(s, time.Now())
 }
 
 // RunCheckAt runs the check using the specified time (useful for testing).
-func RunCheckAt(s *storage.Storage, now time.Time) (*CheckResult, error) {
+func RunCheckAt(s Store, now time.Time) (*CheckResult, error) {
 	result := &CheckResult{}
 
 	// Get all projects
@@ -48,7 +47,7 @@ func RunCheckAt(s *storage.Storage, now time.Time) (*CheckResult, error) {
 }
 
 // runCheckOnProject runs the check on a single project.
-func runCheckOnProject(s *storage.Storage, prefix string, now time.Time) (*CheckResult, error) {
+func runCheckOnProject(s Store, prefix string, now time.Time) (*CheckResult, error) {
 	pf, err := s.LoadProject(prefix)
 	if err != nil {
 		return nil, err
@@ -58,7 +57,7 @@ func runCheckOnProject(s *storage.Storage, prefix string, now time.Time) (*Check
 	modified := false
 
 	// Build initial blocker states
-	blockerStates := computeBlockerStates(pf)
+	blockerStates := ComputeBlockerStates(pf)
 
 	// Find time waits that are ready to resolve
 	for i := range pf.Waits {

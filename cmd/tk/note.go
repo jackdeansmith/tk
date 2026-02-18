@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/jacksmith/tk/internal/model"
 	"github.com/jacksmith/tk/internal/ops"
 	"github.com/jacksmith/tk/internal/storage"
 	"github.com/spf13/cobra"
@@ -34,48 +33,12 @@ func runNote(cmd *cobra.Command, args []string) error {
 	taskID := args[0]
 	text := strings.Join(args[1:], " ")
 
-	if strings.TrimSpace(text) == "" {
-		return fmt.Errorf("note text must not be empty")
-	}
-
 	s, err := storage.Open(".")
 	if err != nil {
 		return err
 	}
 
-	prefix := model.ExtractPrefix(taskID)
-	if prefix == "" {
-		return fmt.Errorf("invalid task ID: %s", taskID)
-	}
-
-	pf, err := s.LoadProject(prefix)
-	if err != nil {
-		return err
-	}
-
-	// Find the task
-	var task *model.Task
-	for i := range pf.Tasks {
-		if strings.EqualFold(pf.Tasks[i].ID, taskID) {
-			task = &pf.Tasks[i]
-			break
-		}
-	}
-	if task == nil {
-		return fmt.Errorf("task %s not found", taskID)
-	}
-
-	// Build new notes: append with newline separator if existing notes
-	var newNotes string
-	if task.Notes == "" {
-		newNotes = text
-	} else {
-		newNotes = task.Notes + "\n" + text
-	}
-
-	changes := ops.TaskChanges{Notes: &newNotes}
-
-	if err := ops.EditTask(s, taskID, changes); err != nil {
+	if err := ops.AppendNote(s, taskID, text); err != nil {
 		return err
 	}
 
