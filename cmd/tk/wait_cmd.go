@@ -204,31 +204,12 @@ func runWaitAdd(cmd *cobra.Command, args []string) error {
 		title = args[0]
 	}
 
-	// Determine project
-	project := waitAddProject
-	if project == "" {
-		cfg, err := s.LoadConfig()
-		if err != nil {
-			return err
-		}
-		if cfg.DefaultProject == "" {
-			return fmt.Errorf("no project specified and no default_project in config")
-		}
-		pf, err := s.LoadProjectByID(cfg.DefaultProject)
-		if err != nil {
-			return fmt.Errorf("default project %q not found", cfg.DefaultProject)
-		}
-		project = pf.Prefix
-	} else {
-		pf, err := s.LoadProject(project)
-		if err != nil {
-			pf, err = s.LoadProjectByID(project)
-			if err != nil {
-				return fmt.Errorf("project %q not found", project)
-			}
-		}
-		project = pf.Prefix
+	// Resolve project (uses default from config if empty)
+	pf, err := ops.ResolveProject(s, waitAddProject)
+	if err != nil {
+		return err
 	}
+	project := pf.Prefix
 
 	// Determine wait type
 	if waitAddQuestion == "" && waitAddAfter == "" {
@@ -355,7 +336,7 @@ func runWaitEdit(cmd *cobra.Command, args []string) error {
 	return nil
 }
 
-func handleWaitBlockerChanges(s *storage.Storage, waitID string, changes *ops.WaitChanges, cmd *cobra.Command, hasChanges *bool) error {
+func handleWaitBlockerChanges(s ops.Store, waitID string, changes *ops.WaitChanges, cmd *cobra.Command, hasChanges *bool) error {
 	if cmd.Flags().Changed("blocked-by") {
 		var blockers []string
 		if waitEditBlockedBy != "" {
@@ -423,7 +404,7 @@ type editableWait struct {
 	BlockedBy  []string `yaml:"blocked_by,omitempty"`
 }
 
-func runWaitEditInteractive(s *storage.Storage, waitID string) error {
+func runWaitEditInteractive(s ops.Store, waitID string) error {
 	prefix := model.ExtractPrefix(waitID)
 	if prefix == "" {
 		return fmt.Errorf("invalid wait ID: %s", waitID)

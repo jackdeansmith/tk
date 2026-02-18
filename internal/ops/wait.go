@@ -7,7 +7,6 @@ import (
 
 	"github.com/jacksmith/tk/internal/graph"
 	"github.com/jacksmith/tk/internal/model"
-	"github.com/jacksmith/tk/internal/storage"
 )
 
 // WaitOptions contains options for creating a new wait.
@@ -32,7 +31,7 @@ type WaitChanges struct {
 }
 
 // AddWait creates a new wait in the given project.
-func AddWait(s *storage.Storage, prefix string, opts WaitOptions) (*model.Wait, error) {
+func AddWait(s Store, prefix string, opts WaitOptions) (*model.Wait, error) {
 	pf, err := s.LoadProject(prefix)
 	if err != nil {
 		return nil, err
@@ -93,7 +92,7 @@ func AddWait(s *storage.Storage, prefix string, opts WaitOptions) (*model.Wait, 
 }
 
 // EditWait modifies an existing wait.
-func EditWait(s *storage.Storage, waitID string, changes WaitChanges) error {
+func EditWait(s Store, waitID string, changes WaitChanges) error {
 	prefix := model.ExtractPrefix(waitID)
 	if prefix == "" {
 		return fmt.Errorf("invalid wait ID: %s", waitID)
@@ -149,7 +148,7 @@ func EditWait(s *storage.Storage, waitID string, changes WaitChanges) error {
 // ResolveWait marks a wait as done.
 // For time waits, allows early resolution by updating 'after' to current time.
 // Returns error if wait is dormant (blocked by incomplete items).
-func ResolveWait(s *storage.Storage, waitID string, resolution string) error {
+func ResolveWait(s Store, waitID string, resolution string) error {
 	prefix := model.ExtractPrefix(waitID)
 	if prefix == "" {
 		return fmt.Errorf("invalid wait ID: %s", waitID)
@@ -170,7 +169,7 @@ func ResolveWait(s *storage.Storage, waitID string, resolution string) error {
 	}
 
 	// Check if wait is dormant (has unresolved blockers)
-	blockerStates := computeBlockerStates(pf)
+	blockerStates := ComputeBlockerStates(pf)
 	for _, blockerID := range wait.BlockedBy {
 		if resolved, ok := blockerStates[blockerID]; !ok || !resolved {
 			return fmt.Errorf("wait is dormant (blocked by %s)", blockerID)
@@ -196,7 +195,7 @@ func ResolveWait(s *storage.Storage, waitID string, resolution string) error {
 // DropWait marks a wait as dropped.
 // If dropDeps is true, dependent items are also dropped recursively.
 // If removeDeps is true, this wait is removed from dependents' blocked_by lists.
-func DropWait(s *storage.Storage, waitID string, reason string, dropDeps, removeDeps bool) error {
+func DropWait(s Store, waitID string, reason string, dropDeps, removeDeps bool) error {
 	prefix := model.ExtractPrefix(waitID)
 	if prefix == "" {
 		return fmt.Errorf("invalid wait ID: %s", waitID)
@@ -258,7 +257,7 @@ func DropWait(s *storage.Storage, waitID string, reason string, dropDeps, remove
 // DeferWait pushes back the dates on a wait.
 // For time waits, updates the 'after' field.
 // For manual waits, updates the 'check_after' field.
-func DeferWait(s *storage.Storage, waitID string, until time.Time) error {
+func DeferWait(s Store, waitID string, until time.Time) error {
 	prefix := model.ExtractPrefix(waitID)
 	if prefix == "" {
 		return fmt.Errorf("invalid wait ID: %s", waitID)
@@ -291,7 +290,7 @@ func DeferWait(s *storage.Storage, waitID string, until time.Time) error {
 }
 
 // AddWaitBlocker adds a blocker to a wait.
-func AddWaitBlocker(s *storage.Storage, waitID, blockerID string) error {
+func AddWaitBlocker(s Store, waitID, blockerID string) error {
 	prefix := model.ExtractPrefix(waitID)
 	if prefix == "" {
 		return fmt.Errorf("invalid wait ID: %s", waitID)
@@ -331,7 +330,7 @@ func AddWaitBlocker(s *storage.Storage, waitID, blockerID string) error {
 }
 
 // RemoveWaitBlocker removes a blocker from a wait.
-func RemoveWaitBlocker(s *storage.Storage, waitID, blockerID string) error {
+func RemoveWaitBlocker(s Store, waitID, blockerID string) error {
 	prefix := model.ExtractPrefix(waitID)
 	if prefix == "" {
 		return fmt.Errorf("invalid wait ID: %s", waitID)

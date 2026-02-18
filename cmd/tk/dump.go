@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/jacksmith/tk/internal/model"
+	"github.com/jacksmith/tk/internal/ops"
 	"github.com/jacksmith/tk/internal/storage"
 	"github.com/spf13/cobra"
 )
@@ -32,25 +33,18 @@ func init() {
 }
 
 func runDump(cmd *cobra.Command, args []string) error {
-	projectRef := args[0]
-
 	s, err := storage.Open(".")
 	if err != nil {
 		return err
 	}
 
-	// Resolve project reference
-	pf, err := s.LoadProject(projectRef)
+	pf, err := ops.ResolveProject(s, args[0])
 	if err != nil {
-		pf, err = s.LoadProjectByID(projectRef)
-		if err != nil {
-			return fmt.Errorf("project %q not found", projectRef)
-		}
+		return err
 	}
 
-	blockerStates := computeBlockerStates(pf)
+	blockerStates := ops.ComputeBlockerStates(pf)
 
-	// Print project header
 	fmt.Printf("# %s: %s\n", pf.Prefix, pf.Name)
 	if pf.Description != "" {
 		fmt.Printf("# %s\n", pf.Description)
@@ -59,11 +53,9 @@ func runDump(cmd *cobra.Command, args []string) error {
 	fmt.Printf("# Created: %s\n", pf.Created.Format(time.RFC3339))
 	fmt.Println()
 
-	// Print tasks
 	if len(pf.Tasks) > 0 {
 		fmt.Println("## Tasks")
 		fmt.Println()
-
 		for _, t := range pf.Tasks {
 			state := model.ComputeTaskState(&t, blockerStates)
 			dumpTask(&t, state)
@@ -71,11 +63,9 @@ func runDump(cmd *cobra.Command, args []string) error {
 		}
 	}
 
-	// Print waits
 	if len(pf.Waits) > 0 {
 		fmt.Println("## Waits")
 		fmt.Println()
-
 		now := time.Now()
 		for _, w := range pf.Waits {
 			state := model.ComputeWaitState(&w, blockerStates, now)
@@ -95,38 +85,29 @@ func dumpTask(t *model.Task, state model.TaskState) {
 	if len(t.Tags) > 0 {
 		fmt.Printf("Tags: %s\n", strings.Join(t.Tags, ", "))
 	}
-
 	if t.Assignee != "" {
 		fmt.Printf("Assignee: %s\n", t.Assignee)
 	}
-
 	if t.DueDate != nil {
 		fmt.Printf("Due: %s\n", t.DueDate.Format("2006-01-02"))
 	}
-
 	if t.AutoComplete {
 		fmt.Println("Auto-complete: yes")
 	}
-
 	if len(t.BlockedBy) > 0 {
 		fmt.Printf("Blocked by: %s\n", strings.Join(t.BlockedBy, ", "))
 	}
-
 	fmt.Printf("Created: %s\n", t.Created.Format(time.RFC3339))
 	fmt.Printf("Updated: %s\n", t.Updated.Format(time.RFC3339))
-
 	if t.DoneAt != nil {
 		fmt.Printf("Done at: %s\n", t.DoneAt.Format(time.RFC3339))
 	}
-
 	if t.DroppedAt != nil {
 		fmt.Printf("Dropped at: %s\n", t.DroppedAt.Format(time.RFC3339))
 	}
-
 	if t.DropReason != "" {
 		fmt.Printf("Drop reason: %s\n", t.DropReason)
 	}
-
 	if t.Notes != "" {
 		fmt.Println()
 		fmt.Println("Notes:")
@@ -140,11 +121,9 @@ func dumpWait(w *model.Wait, state model.WaitState) {
 	fmt.Printf("### %s: %s\n", w.ID, w.DisplayText())
 	fmt.Printf("Status: %s (%s)\n", w.Status, state)
 	fmt.Printf("Type: %s\n", w.ResolutionCriteria.Type)
-
 	if w.Title != "" {
 		fmt.Printf("Title: %s\n", w.Title)
 	}
-
 	if w.ResolutionCriteria.Type == model.ResolutionTypeManual {
 		if w.ResolutionCriteria.Question != "" {
 			fmt.Printf("Question: %s\n", w.ResolutionCriteria.Question)
@@ -157,29 +136,22 @@ func dumpWait(w *model.Wait, state model.WaitState) {
 			fmt.Printf("After: %s\n", w.ResolutionCriteria.After.Format(time.RFC3339))
 		}
 	}
-
 	if len(w.BlockedBy) > 0 {
 		fmt.Printf("Blocked by: %s\n", strings.Join(w.BlockedBy, ", "))
 	}
-
 	fmt.Printf("Created: %s\n", w.Created.Format(time.RFC3339))
-
 	if w.DoneAt != nil {
 		fmt.Printf("Done at: %s\n", w.DoneAt.Format(time.RFC3339))
 	}
-
 	if w.Resolution != "" {
 		fmt.Printf("Resolution: %s\n", w.Resolution)
 	}
-
 	if w.DroppedAt != nil {
 		fmt.Printf("Dropped at: %s\n", w.DroppedAt.Format(time.RFC3339))
 	}
-
 	if w.DropReason != "" {
 		fmt.Printf("Drop reason: %s\n", w.DropReason)
 	}
-
 	if w.Notes != "" {
 		fmt.Println()
 		fmt.Println("Notes:")

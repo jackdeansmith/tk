@@ -93,7 +93,6 @@ var (
 )
 
 func init() {
-	// Project new command
 	projectNewCmd.Flags().StringVar(&projectNewPrefix, "prefix", "", "project prefix (2-3 uppercase letters)")
 	projectNewCmd.Flags().StringVar(&projectNewName, "name", "", "project display name")
 	projectNewCmd.Flags().StringVar(&projectNewDescription, "description", "", "project description")
@@ -101,7 +100,6 @@ func init() {
 	projectNewCmd.MarkFlagRequired("name")
 	projectCmd.AddCommand(projectNewCmd)
 
-	// Project edit command
 	projectEditCmd.Flags().StringVar(&projectEditName, "name", "", "set project name")
 	projectEditCmd.Flags().StringVar(&projectEditDescription, "description", "", "set project description")
 	projectEditCmd.Flags().StringVar(&projectEditStatus, "status", "", "set project status (active/paused/done)")
@@ -109,7 +107,6 @@ func init() {
 	projectEditCmd.Flags().BoolVarP(&projectEditInteractive, "interactive", "i", false, "edit in $EDITOR")
 	projectCmd.AddCommand(projectEditCmd)
 
-	// Project delete command
 	projectDeleteCmd.Flags().BoolVar(&projectDeleteForce, "force", false, "confirm deletion")
 	projectCmd.AddCommand(projectDeleteCmd)
 
@@ -117,127 +114,56 @@ func init() {
 }
 
 func runProject(cmd *cobra.Command, args []string) error {
-	projectRef := args[0]
-
 	s, err := storage.Open(".")
 	if err != nil {
 		return err
 	}
 
-	// Try loading by prefix first, then by ID
-	pf, err := s.LoadProject(projectRef)
+	summary, err := ops.GetProjectSummary(s, args[0])
 	if err != nil {
-		// Try by ID
-		pf, err = s.LoadProjectByID(projectRef)
-		if err != nil {
-			return fmt.Errorf("project %q not found", projectRef)
-		}
+		return err
 	}
 
-	// Compute blocker states for state calculations
-	blockerStates := computeBlockerStates(pf)
-
-	// Count tasks by state
-	var openCount, readyCount, blockedCount, waitingCount, doneCount, droppedCount int
-	for _, t := range pf.Tasks {
-		switch t.Status {
-		case model.TaskStatusDone:
-			doneCount++
-		case model.TaskStatusDropped:
-			droppedCount++
-		case model.TaskStatusOpen:
-			openCount++
-			state := model.ComputeTaskState(&t, blockerStates)
-			switch state {
-			case model.TaskStateReady:
-				readyCount++
-			case model.TaskStateBlocked:
-				blockedCount++
-			case model.TaskStateWaiting:
-				waitingCount++
-			}
-		}
+	fmt.Printf("%s: %s\n", summary.Project.Prefix, summary.Project.Name)
+	if summary.Project.Description != "" {
+		fmt.Printf("%s\n", summary.Project.Description)
 	}
-
-	// Count waits
-	var openWaits, doneWaits, droppedWaits int
-	for _, w := range pf.Waits {
-		switch w.Status {
-		case model.WaitStatusOpen:
-			openWaits++
-		case model.WaitStatusDone:
-			doneWaits++
-		case model.WaitStatusDropped:
-			droppedWaits++
-		}
-	}
-
-	// Print summary
-	fmt.Printf("%s: %s\n", pf.Prefix, pf.Name)
-	if pf.Description != "" {
-		fmt.Printf("%s\n", pf.Description)
-	}
-	fmt.Printf("Status: %s\n", pf.Status)
+	fmt.Printf("Status: %s\n", summary.Project.Status)
 	fmt.Println()
 
-	// Task summary
-	if openCount > 0 {
-		fmt.Printf("%d open", openCount)
-		details := []string{}
-		if readyCount > 0 {
-			details = append(details, fmt.Sprintf("%d ready", readyCount))
+	if summary.OpenCount > 0 {
+		fmt.Printf("%d open", summary.OpenCount)
+		var details []string
+		if summary.ReadyCount > 0 {
+			details = append(details, fmt.Sprintf("%d ready", summary.ReadyCount))
 		}
-		if blockedCount > 0 {
-			details = append(details, fmt.Sprintf("%d blocked", blockedCount))
+		if summary.BlockedCount > 0 {
+			details = append(details, fmt.Sprintf("%d blocked", summary.BlockedCount))
 		}
-		if waitingCount > 0 {
-			details = append(details, fmt.Sprintf("%d waiting", waitingCount))
+		if summary.WaitingCount > 0 {
+			details = append(details, fmt.Sprintf("%d waiting", summary.WaitingCount))
 		}
 		if len(details) > 0 {
-			fmt.Printf(" (")
-			for i, d := range details {
-				if i > 0 {
-					fmt.Printf(", ")
-				}
-				fmt.Printf("%s", d)
-			}
-			fmt.Printf(")")
+			fmt.Printf(" (%s)", strings.Join(details, ", "))
 		}
 	} else {
 		fmt.Printf("0 open")
 	}
-	fmt.Printf(", %d done", doneCount)
-	if droppedCount > 0 {
-		fmt.Printf(", %d dropped", droppedCount)
+	fmt.Printf(", %d done", summary.DoneCount)
+	if summary.DroppedCount > 0 {
+		fmt.Printf(", %d dropped", summary.DroppedCount)
 	}
 	fmt.Println()
 
-	// Wait summary
-	if openWaits > 0 || doneWaits > 0 || droppedWaits > 0 {
-		fmt.Printf("%d waits", openWaits)
-		if doneWaits > 0 {
-			fmt.Printf(" (%d resolved)", doneWaits)
+	if summary.OpenWaits > 0 || summary.DoneWaits > 0 || summary.DroppedWaits > 0 {
+		fmt.Printf("%d waits", summary.OpenWaits)
+		if summary.DoneWaits > 0 {
+			fmt.Printf(" (%d resolved)", summary.DoneWaits)
 		}
 		fmt.Println()
 	}
 
 	return nil
-}
-
-// computeBlockerStates builds a map of blocker ID to resolved status.
-// true = resolved (done/dropped), false = still open (blocks)
-func computeBlockerStates(pf *model.ProjectFile) model.BlockerStatus {
-	states := make(model.BlockerStatus)
-
-	for _, t := range pf.Tasks {
-		states[t.ID] = t.Status == model.TaskStatusDone || t.Status == model.TaskStatusDropped
-	}
-
-	for _, w := range pf.Waits {
-		states[w.ID] = w.Status == model.WaitStatusDone || w.Status == model.WaitStatusDropped
-	}
-
-	return states
 }
 
 func runProjectNew(cmd *cobra.Command, args []string) error {
@@ -267,13 +193,9 @@ func runProjectEdit(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	// Resolve project reference to prefix
-	pf, err := s.LoadProject(projectRef)
+	pf, err := ops.ResolveProject(s, projectRef)
 	if err != nil {
-		pf, err = s.LoadProjectByID(projectRef)
-		if err != nil {
-			return fmt.Errorf("project %q not found", projectRef)
-		}
+		return err
 	}
 	prefix := pf.Prefix
 
@@ -281,7 +203,6 @@ func runProjectEdit(cmd *cobra.Command, args []string) error {
 		return runProjectEditInteractive(s, pf)
 	}
 
-	// Handle prefix change separately (it requires special handling)
 	if cmd.Flags().Changed("prefix") && projectEditPrefix != prefix {
 		if err := ops.ChangeProjectPrefix(s, prefix, projectEditPrefix); err != nil {
 			return err
@@ -290,7 +211,6 @@ func runProjectEdit(cmd *cobra.Command, args []string) error {
 		prefix = strings.ToUpper(projectEditPrefix)
 	}
 
-	// Build changes from flags
 	changes := ops.ProjectChanges{}
 	hasChanges := false
 
@@ -298,12 +218,10 @@ func runProjectEdit(cmd *cobra.Command, args []string) error {
 		changes.Name = &projectEditName
 		hasChanges = true
 	}
-
 	if cmd.Flags().Changed("description") {
 		changes.Description = &projectEditDescription
 		hasChanges = true
 	}
-
 	if cmd.Flags().Changed("status") {
 		status := model.ProjectStatus(projectEditStatus)
 		switch status {
@@ -329,14 +247,13 @@ func runProjectEdit(cmd *cobra.Command, args []string) error {
 	return nil
 }
 
-// editableProject is a simplified project representation for interactive editing.
 type editableProject struct {
 	Name        string `yaml:"name"`
 	Description string `yaml:"description,omitempty"`
 	Status      string `yaml:"status"`
 }
 
-func runProjectEditInteractive(s *storage.Storage, pf *model.ProjectFile) error {
+func runProjectEditInteractive(s ops.Store, pf *model.ProjectFile) error {
 	editable := editableProject{
 		Name:        pf.Name,
 		Description: pf.Description,
@@ -394,16 +311,11 @@ func runProjectDelete(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	// Resolve project reference to prefix
-	pf, err := s.LoadProject(projectRef)
+	pf, err := ops.ResolveProject(s, projectRef)
 	if err != nil {
-		pf, err = s.LoadProjectByID(projectRef)
-		if err != nil {
-			return fmt.Errorf("project %q not found", projectRef)
-		}
+		return err
 	}
 
-	// Count open tasks and waits to provide an informative warning
 	if !projectDeleteForce {
 		var openTasks, openWaits int
 		for _, t := range pf.Tasks {

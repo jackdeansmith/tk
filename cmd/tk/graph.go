@@ -45,41 +45,20 @@ func runGraph(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	// Run autocheck if configured
-	cfg, err := s.LoadConfig()
-	if err != nil {
-		return err
-	}
-	if cfg.AutoCheck {
-		_, _ = ops.RunCheck(s)
-	}
+	ops.AutoCheck(s)
 
-	// Determine which projects to include
 	var projects []*model.ProjectFile
-
 	if graphProject != "" {
-		pf, err := s.LoadProject(graphProject)
-		if err != nil {
-			pf, err = s.LoadProjectByID(graphProject)
-			if err != nil {
-				return fmt.Errorf("project %q not found", graphProject)
-			}
-		}
-		projects = append(projects, pf)
-	} else {
-		// All active projects
-		prefixes, err := s.ListProjects()
+		pf, err := ops.ResolveProject(s, graphProject)
 		if err != nil {
 			return err
 		}
-		for _, prefix := range prefixes {
-			pf, err := s.LoadProject(prefix)
-			if err != nil {
-				continue
-			}
-			if pf.Status == model.ProjectStatusActive {
-				projects = append(projects, pf)
-			}
+		projects = append(projects, pf)
+	} else {
+		var err error
+		projects, err = ops.LoadActiveProjects(s, false)
+		if err != nil {
+			return err
 		}
 	}
 
@@ -92,7 +71,7 @@ func runGraph(cmd *cobra.Command, args []string) error {
 	now := time.Now()
 
 	for _, pf := range projects {
-		blockerStates := computeBlockerStates(pf)
+		blockerStates := ops.ComputeBlockerStates(pf)
 
 		// Output task nodes
 		for _, t := range pf.Tasks {

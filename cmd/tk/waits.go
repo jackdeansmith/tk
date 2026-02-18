@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"os"
 	"strings"
-	"time"
 
 	"github.com/jacksmith/tk/internal/cli"
 	"github.com/jacksmith/tk/internal/model"
@@ -50,15 +49,11 @@ func init() {
 	waitsCmd.Flags().BoolVar(&waitsDone, "done", false, "show only done waits")
 	waitsCmd.Flags().BoolVar(&waitsDropped, "dropped", false, "show only dropped waits")
 	waitsCmd.Flags().BoolVar(&waitsAll, "all", false, "show all waits")
-
-	// Register completion function
 	waitsCmd.RegisterFlagCompletionFunc("project", completeProjectIDs)
-
 	rootCmd.AddCommand(waitsCmd)
 }
 
 func runWaits(cmd *cobra.Command, args []string) error {
-	// Validate that conflicting status filters are not combined
 	if err := validateWaitsStatusFilters(); err != nil {
 		return err
 	}
@@ -70,8 +65,6 @@ func runWaits(cmd *cobra.Command, args []string) error {
 
 	// waits command always runs check (per spec), regardless of autocheck config
 	checkResult, _ := ops.RunCheck(s)
-
-	// Show check results if any waits were resolved
 	if checkResult != nil && len(checkResult.ResolvedWaits) > 0 {
 		for _, wid := range checkResult.ResolvedWaits {
 			fmt.Printf("Auto-resolved: %s\n", wid)
@@ -79,97 +72,49 @@ func runWaits(cmd *cobra.Command, args []string) error {
 		fmt.Println()
 	}
 
-	now := time.Now()
-
-	// Determine which projects to include
-	var projects []*model.ProjectFile
-
-	if waitsProject != "" {
-		// Single project specified
-		pf, err := s.LoadProject(waitsProject)
-		if err != nil {
-			pf, err = s.LoadProjectByID(waitsProject)
-			if err != nil {
-				return fmt.Errorf("project %q not found", waitsProject)
-			}
-		}
-		projects = append(projects, pf)
-	} else {
-		// All active projects
-		prefixes, err := s.ListProjects()
-		if err != nil {
-			return err
-		}
-		for _, prefix := range prefixes {
-			pf, err := s.LoadProject(prefix)
-			if err != nil {
-				continue
-			}
-			// Only include active projects unless --all
-			if !waitsAll && pf.Status != model.ProjectStatusActive {
-				continue
-			}
-			projects = append(projects, pf)
-		}
+	filter := ops.WaitFilter{
+		Project: waitsProject,
+		All:     waitsAll,
+	}
+	if state := resolveWaitStateFilter(); state != nil {
+		filter.State = state
 	}
 
-	// Collect all waits with filtering
-	table := cli.NewTable()
-	hasResults := false
-
-	for _, pf := range projects {
-		blockerStates := computeBlockerStates(pf)
-
-		for _, w := range pf.Waits {
-			if shouldIncludeWait(&w, blockerStates, now) {
-				hasResults = true
-				state := model.ComputeWaitState(&w, blockerStates, now)
-				table.AddRow(
-					w.ID,
-					formatWaitState(state),
-					w.DisplayText(),
-				)
-			}
-		}
+	results, err := ops.ListWaits(s, filter)
+	if err != nil {
+		return err
 	}
 
-	if !hasResults {
+	if len(results) == 0 {
 		fmt.Println("No waits found.")
 		return nil
 	}
 
+	table := cli.NewTable()
+	for _, r := range results {
+		table.AddRow(r.Wait.ID, formatWaitState(r.State), r.Wait.DisplayText())
+	}
 	table.Render(os.Stdout)
 	return nil
 }
 
-func shouldIncludeWait(w *model.Wait, blockerStates model.BlockerStatus, now time.Time) bool {
-	state := model.ComputeWaitState(w, blockerStates, now)
-
-	// Status filters
-	if waitsDone {
-		return state == model.WaitStateDone
+func resolveWaitStateFilter() *model.WaitState {
+	var state model.WaitState
+	switch {
+	case waitsActionable:
+		state = model.WaitStateActionable
+	case waitsDormant:
+		state = model.WaitStateDormant
+	case waitsDone:
+		state = model.WaitStateDone
+	case waitsDropped:
+		state = model.WaitStateDropped
+	default:
+		return nil
 	}
-	if waitsDropped {
-		return state == model.WaitStateDropped
-	}
-	if waitsActionable {
-		return state == model.WaitStateActionable
-	}
-	if waitsDormant {
-		return state == model.WaitStateDormant
-	}
-	if waitsAll {
-		return true
-	}
-
-	// Default: show only open waits (not done/dropped)
-	return w.Status == model.WaitStatusOpen
+	return &state
 }
 
-// validateWaitsStatusFilters checks that at most one status filter is active.
-// Status filters (--actionable, --dormant, --done, --dropped, --all) are
-// mutually exclusive. Using more than one produces confusing results because a
-// wait can only be in one state at a time.
 func validateWaitsStatusFilters() error {
 	var active []string
 	if waitsActionable {

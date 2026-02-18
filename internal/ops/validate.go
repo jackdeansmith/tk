@@ -6,7 +6,6 @@ import (
 
 	"github.com/jacksmith/tk/internal/graph"
 	"github.com/jacksmith/tk/internal/model"
-	"github.com/jacksmith/tk/internal/storage"
 )
 
 // ValidationErrorType represents the type of validation error.
@@ -42,7 +41,7 @@ type ValidationFix struct {
 
 // Validate checks all projects for data integrity issues.
 // Returns a list of validation errors found.
-func Validate(s *storage.Storage) ([]ValidationError, error) {
+func Validate(s Store) ([]ValidationError, error) {
 	prefixes, err := s.ListProjects()
 	if err != nil {
 		return nil, err
@@ -61,7 +60,7 @@ func Validate(s *storage.Storage) ([]ValidationError, error) {
 }
 
 // validateProject validates a single project.
-func validateProject(s *storage.Storage, prefix string) ([]ValidationError, error) {
+func validateProject(s Store, prefix string) ([]ValidationError, error) {
 	pf, err := s.LoadProject(prefix)
 	if err != nil {
 		return nil, err
@@ -275,7 +274,7 @@ func detectCycles(pf *model.ProjectFile, g *graph.Graph) []ValidationError {
 
 // ValidateAndFix validates all projects and auto-repairs fixable issues.
 // Returns a list of fixes that were applied.
-func ValidateAndFix(s *storage.Storage) ([]ValidationFix, error) {
+func ValidateAndFix(s Store) ([]ValidationFix, error) {
 	prefixes, err := s.ListProjects()
 	if err != nil {
 		return nil, err
@@ -294,7 +293,7 @@ func ValidateAndFix(s *storage.Storage) ([]ValidationFix, error) {
 }
 
 // validateAndFixProject validates and fixes a single project.
-func validateAndFixProject(s *storage.Storage, prefix string) ([]ValidationFix, error) {
+func validateAndFixProject(s Store, prefix string) ([]ValidationFix, error) {
 	pf, err := s.LoadProject(prefix)
 	if err != nil {
 		return nil, err
@@ -361,6 +360,6 @@ func validateAndFixProject(s *storage.Storage, prefix string) ([]ValidationFix, 
 }
 
 // ValidateProject validates a single project by prefix.
-func ValidateProject(s *storage.Storage, prefix string) ([]ValidationError, error) {
+func ValidateProject(s Store, prefix string) ([]ValidationError, error) {
 	return validateProject(s, prefix)
 }

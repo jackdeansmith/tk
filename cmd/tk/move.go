@@ -41,21 +41,15 @@ func runMove(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	// Resolve destination project to prefix
-	destPrefix := moveTo
-	pf, err := s.LoadProject(destPrefix)
+	destPf, err := ops.ResolveProject(s, moveTo)
 	if err != nil {
-		pf, err = s.LoadProjectByID(destPrefix)
-		if err != nil {
-			return fmt.Errorf("destination project %q not found", destPrefix)
-		}
-		destPrefix = pf.Prefix
+		return fmt.Errorf("destination project %q not found", moveTo)
 	}
 
-	if err := ops.MoveTask(s, taskID, destPrefix); err != nil {
+	if err := ops.MoveTask(s, taskID, destPf.Prefix); err != nil {
 		return err
 	}
 
-	fmt.Printf("%s moved to project %s.\n", taskID, destPrefix)
+	fmt.Printf("%s moved to project %s.\n", taskID, destPf.Prefix)
 	return nil
 }

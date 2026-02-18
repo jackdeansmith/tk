@@ -7,7 +7,6 @@ import (
 	"time"
 
 	"github.com/jacksmith/tk/internal/model"
-	"github.com/jacksmith/tk/internal/storage"
 )
 
 // ProjectChanges represents fields that can be updated on a project.
@@ -18,7 +17,7 @@ type ProjectChanges struct {
 }
 
 // CreateProject creates a new project with the given parameters.
-func CreateProject(s *storage.Storage, id, prefix, name, description string) error {
+func CreateProject(s Store, id, prefix, name, description string) error {
 	// Normalize prefix to uppercase
 	prefix = strings.ToUpper(prefix)
 
@@ -66,7 +65,7 @@ func CreateProject(s *storage.Storage, id, prefix, name, description string) err
 }
 
 // EditProject updates project metadata.
-func EditProject(s *storage.Storage, prefix string, changes ProjectChanges) error {
+func EditProject(s Store, prefix string, changes ProjectChanges) error {
 	pf, err := s.LoadProject(prefix)
 	if err != nil {
 		return err
@@ -87,7 +86,7 @@ func EditProject(s *storage.Storage, prefix string, changes ProjectChanges) erro
 
 // DeleteProject removes a project and all its tasks/waits.
 // If force is false, returns an error if the project has any open tasks or waits.
-func DeleteProject(s *storage.Storage, prefix string, force bool) error {
+func DeleteProject(s Store, prefix string, force bool) error {
 	pf, err := s.LoadProject(prefix)
 	if err != nil {
 		return err
@@ -112,7 +111,7 @@ func DeleteProject(s *storage.Storage, prefix string, force bool) error {
 }
 
 // ChangeProjectPrefix changes a project's prefix and updates all task/wait IDs.
-func ChangeProjectPrefix(s *storage.Storage, oldPrefix, newPrefix string) error {
+func ChangeProjectPrefix(s Store, oldPrefix, newPrefix string) error {
 	oldPrefix = strings.ToUpper(oldPrefix)
 	newPrefix = strings.ToUpper(newPrefix)
 
